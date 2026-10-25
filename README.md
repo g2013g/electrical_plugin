@@ -69,7 +69,7 @@ logic is testable without a CAD host and is insulated from ABI churn.
 | `EL_CONNECTOR [refdes] [x,y] [PINS=a,b,c \| COUNT=n] [SPACING=] [PERROW=] [ORIENT=] [WNC]` | Place a parametric connector. `EDIT <ref>` changes its pin field; `LIST`, `CLEAR`. |
 | `EL_CATALOG [LIST \| SEARCH <text> \| FAMILY <code>]` | Browse the parts catalogue. `ASSIGN <item> MFG= CAT=`, `CLEAR <item>`, `PATH`. |
 | `EL_SIGNAL <name> SOURCE\|DEST [x,y] [WIRE=<wref>]` \| LIST \| CLEAR <name\|ALL> \| SET <name> NAME= DIR= | Place a signal arrow — an off-sheet continuation marker anchored to a wire end. Arrows pair across sheets by name through the project register; after both sheets sync, a destination arrow labels itself with the source sheet. |
-| `EL_PROJECT [NEW <name> \| SET [SHEET= NAME= ADD=path] \| SYNC \| PATH]` | The cross-sheet register (`el-project.json`, beside the drawings): the drawing list with sheet numbers, and the signal register `SYNC` folds this sheet's arrows into. Bare shows it. |
+| `EL_PROJECT [NEW <name> \| SET [SHEET= NAME= ADD=path] \| SYNC \| CHECK \| PATH]` | The cross-sheet register (`el-project.json`, beside the drawings): the drawing list with sheet numbers, the signal register, and each sheet's **extract** — the tags and wire numbers its sync declared. `SYNC` folds a sheet's arrows and extract in, then says whether anything now collides; `CHECK` names every cross-sheet tag or wire-number collision. Bare shows it all. |
 | `EL_REPORT [kind] [path.csv] [FORCE] [TABLE [x,y]] [HEIGHT=] \| ALL \| LIST` | Export a report, or draw it on the sheet. Kinds: BOM, COMPONENTS, WIREFROMTO, WIRELABELS, TERMINALS, CABLES, MISSINGCATALOG, DRAWINGLIST. |
 | `EL_AUDIT [QUIET] [CODES]` | What is wrong with this drawing, and whether it is reportable. |
 | `EL_MOVE <target> <x,y> \| DX= DY= [ROT=]` | Move a device, terminal, connector or ladder; attached wires are re-seated. |
@@ -332,8 +332,15 @@ the wire-crossing gap that Phase 1 deferred (2026-10-25):
   labels itself with the sheet its source lives on — without that sheet being
   open. Arrows ride their wire end through moves, re-seats and trims, and the
   audit rules `SIGNAL_NO_NAME` / `SIGNAL_NO_WIRE` / `DUP_SIGNAL_SOURCE` keep a
-  broken arrow from hiding. Project-wide retag and cross-drawing wire-number
-  uniqueness are the next layer on this register.
+  broken arrow from hiding.
+- **Cross-sheet collisions (T2, second increment)** — every `EL_PROJECT SYNC`
+  registers the sheet's **extract**: its parent device tags and wire numbers.
+  `EL_PROJECT CHECK` (and every sync, and the drawing list report) name the
+  designators two sheets both claim — the offline stand-in for ACADE's
+  project-wide update/retag, possible because each sheet declares what it
+  holds instead of the register reading drawings it cannot open. The drawing
+  list report lists every project sheet and the collision verdict from the
+  register.
 
 The plan's phases are complete. What is deferred, named rather than forgotten:
 

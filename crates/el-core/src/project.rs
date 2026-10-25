@@ -46,6 +46,24 @@ pub struct SignalEntry {
     pub dest_sheets: Vec<String>,
 }
 
+/// One sheet's **extract**: the device tags and wire numbers its sync
+/// registered, so cross-sheet collisions are visible without opening the
+/// other drawing. This is the offline stand-in for ACADE's project-wide
+/// update/retag — the register cannot read another drawing, but each sheet
+/// can declare what it holds.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct SheetExtract {
+    pub sheet: String,
+    /// Parent device tags on the sheet. A child contact shares its parent's
+    /// tag by design, so only parents are extracted — counting children would
+    /// report every correctly-linked contact as a collision.
+    #[serde(default)]
+    pub tags: Vec<String>,
+    /// The sheet's wire numbers.
+    #[serde(default)]
+    pub wire_numbers: Vec<String>,
+}
+
 /// The project file.
 #[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
 pub struct Project {
@@ -56,6 +74,8 @@ pub struct Project {
     pub drawings: Vec<ProjectDrawing>,
     #[serde(default)]
     pub signals: Vec<SignalEntry>,
+    #[serde(default)]
+    pub extracts: Vec<SheetExtract>,
 }
 
 impl Default for Project {
@@ -65,6 +85,7 @@ impl Default for Project {
             name: String::new(),
             drawings: Vec::new(),
             signals: Vec::new(),
+            extracts: Vec::new(),
         }
     }
 }
@@ -101,6 +122,11 @@ impl Project {
     /// The register entry for a signal name, if any sheet has synced it.
     pub fn signal(&self, name: &str) -> Option<&SignalEntry> {
         self.signals.iter().find(|s| s.name == name)
+    }
+
+    /// One sheet's extract, if it has synced.
+    pub fn extract(&self, sheet: &str) -> Option<&SheetExtract> {
+        self.extracts.iter().find(|e| e.sheet == sheet)
     }
 
     /// Fold one sheet's arrow into the register.
@@ -144,6 +170,56 @@ impl Project {
                 false => Some(format!("← {}", entry.source_sheet)),
             }
         }
+    }
+
+    /// Insert or update one sheet's extract, matched by sheet number.
+    pub fn sync_extract(&mut self, sheet: &str, tags: Vec<String>, wire_numbers: Vec<String>) {
+        let extract = SheetExtract {
+            sheet: sheet.to_string(),
+            tags,
+            wire_numbers,
+        };
+        match self.extracts.iter_mut().find(|e| e.sheet == sheet) {
+            Some(e) => *e = extract,
+            None => self.extracts.push(extract),
+        }
+    }
+
+    /// Device tags carried by more than one sheet: `(tag, sheets)`, sorted.
+    ///
+    /// A collision is a real defect — the same relay numbered K1 on two sheets
+    /// is two relays that every cross-reference and bill of materials will
+    /// conflate. (An installation/location qualifier refines this in ACADE;
+    /// the register flags the plain case first.)
+    pub fn tag_conflicts(&self) -> Vec<(String, Vec<String>)> {
+        Self::collisions(self.extracts.iter().map(|e| (&e.sheet, &e.tags)))
+    }
+
+    /// Wire numbers carried by more than one sheet, same shape as
+    /// [`Self::tag_conflicts`].
+    pub fn wire_number_conflicts(&self) -> Vec<(String, Vec<String>)> {
+        Self::collisions(
+            self.extracts
+                .iter()
+                .map(|e| (&e.sheet, &e.wire_numbers)),
+        )
+    }
+
+    /// Values shared by more than one sheet, from `(sheet, values)` pairs.
+    fn collisions<'a, I>(extracts: I) -> Vec<(String, Vec<String>)>
+    where
+        I: Iterator<Item = (&'a String, &'a Vec<String>)>,
+    {
+        let mut seen: std::collections::BTreeMap<&str, Vec<String>> = Default::default();
+        for (sheet, values) in extracts {
+            for v in values {
+                seen.entry(v.as_str()).or_default().push(sheet.clone());
+            }
+        }
+        seen.into_iter()
+            .filter(|(_, sheets)| sheets.len() > 1)
+            .map(|(v, sheets)| (v.to_string(), sheets))
+            .collect()
     }
 }
 
@@ -215,5 +291,32 @@ mod tests {
         assert_eq!(p.pairing_note("STOP", false).as_deref(), Some("← 01"));
         // An unknown signal pairs with nothing.
         assert_eq!(p.pairing_note("NOPE", false), None);
+    }
+
+    #[test]
+    fn extracts_upsert_by_sheet_and_conflicts_name_every_sheet() {
+        let mut p = Project::new("P");
+        p.sync_extract("01", vec!["K1".into(), "Q1".into()], vec!["W1".into(), "W2".into()]);
+        p.sync_extract("02", vec!["K2".into()], vec!["W3".into()]);
+        // A re-sync replaces, not appends.
+        p.sync_extract("02", vec!["K1".into()], vec!["W2".into(), "W4".into()]);
+        assert_eq!(p.extracts.len(), 2);
+        assert_eq!(p.extract("02").unwrap().tags, vec!["K1".to_string()]);
+
+        // K1 and W2 now live on both sheets; everything else is clean.
+        let tags = p.tag_conflicts();
+        assert_eq!(tags, vec![("K1".to_string(), vec!["01".to_string(), "02".to_string()])]);
+        let wires = p.wire_number_conflicts();
+        assert_eq!(
+            wires,
+            vec![("W2".to_string(), vec!["01".to_string(), "02".to_string()])]
+        );
+    }
+
+    #[test]
+    fn an_older_register_without_extracts_opens_and_reports_clean() {
+        let p = Project::from_json(r#"{"version":1,"name":"P","drawings":[],"signals":[]}"#).unwrap();
+        assert!(p.tag_conflicts().is_empty());
+        assert!(p.wire_number_conflicts().is_empty());
     }
 }

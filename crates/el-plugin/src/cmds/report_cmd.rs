@@ -107,12 +107,24 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
     }
 
     // ── build and emit ───────────────────────────────────────────────────
+    // The drawing list is the one report that reads beyond this drawing: when
+    // a project register exists it names every sheet and any cross-sheet
+    // collisions, so the report and `EL_PROJECT SHOW` cannot disagree.
+    let project = crate::cmds::project::load(host).ok().flatten();
+    let build = |kind: ReportKind| -> TableLayout {
+        let layout = report::build(kind, &idx, catalog.as_ref(), &settings);
+        match (kind, &project) {
+            (ReportKind::DrawingList, Some(p)) => with_project_rows(&layout, p),
+            _ => layout,
+        }
+    };
+
     if to_table {
         let height = a.number("HEIGHT").unwrap_or(2.5);
         let at = a.first_coord().map(|c| [c[0], c[1], 0.0]);
         let mut layouts: Vec<TableLayout> = Vec::new();
         for kind in &kinds {
-            layouts.push(report::build(*kind, &idx, catalog.as_ref(), &settings));
+            layouts.push(build(*kind));
         }
         draw_tables(host, &layouts, at, height);
         return;
@@ -121,7 +133,7 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
     // One CSV, or one per report for `ALL`.
     let stamp = epoch();
     if kinds.len() == 1 {
-        let layout = report::build(kinds[0], &idx, catalog.as_ref(), &settings);
+        let layout = build(kinds[0]);
         let target = a
             .free
             .iter()
@@ -138,7 +150,7 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
     let dir = library::drawing_dir(host).unwrap_or_else(|| std::path::PathBuf::from("."));
     let mut written = 0usize;
     for kind in &kinds {
-        let layout = report::build(*kind, &idx, catalog.as_ref(), &settings);
+        let layout = build(*kind);
         let target = dir.join(el_core::csv::file_name(*kind, &stamp));
         if write_csv_quiet(host, &layout, &target) {
             written += 1;
@@ -152,8 +164,7 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
 }
 
 fn write_csv(host: &mut dyn HostApi, layout: &TableLayout, target: &std::path::Path) {
-    let csv = el_core::csv::to_csv(layout);
-    match std::fs::write(target, &csv) {
+    let csv = el_core::csv::to_csv(layout);    match std::fs::write(target, &csv) {
         Ok(()) => {
             host.push_output(&format!(
                 "{} — {} row(s) written to {}",
@@ -261,4 +272,42 @@ fn epoch() -> String {
         .duration_since(std::time::UNIX_EPOCH)
         .map(|d| d.as_secs().to_string())
         .unwrap_or_else(|_| "0".to_string())
+}
+
+/// Extend a drawing list with the project register's rows.
+///
+/// The sheet's own metadata stays first; the register adds what it knows —
+/// every project drawing, the signal register's size, and the cross-sheet
+/// collision verdict — in the same two columns, so the table reads as one.
+fn with_project_rows(layout: &TableLayout, p: &el_core::project::Project) -> TableLayout {
+    let mut rows = layout.rows.clone();
+    if !p.name.is_empty() {
+        rows.push(vec!["Project".to_string(), p.name.clone()]);
+    }
+    for d in &p.drawings {
+        let mut line = format!("sheet {}", if d.sheet.is_empty() { "—" } else { &d.sheet });
+        if !d.name.is_empty() {
+            line.push_str(&format!(" — {}", d.name));
+        }
+        if !d.path.is_empty() {
+            line.push_str(&format!(" ({})", d.path));
+        }
+        rows.push(vec!["Project drawing".to_string(), line]);
+    }
+    if !p.signals.is_empty() {
+        rows.push(vec![
+            "Project signals".to_string(),
+            format!("{} registered", p.signals.len()),
+        ]);
+    }
+    let collisions = p.tag_conflicts().len() + p.wire_number_conflicts().len();
+    rows.push(vec![
+        "Cross-sheet check".to_string(),
+        match collisions {
+            0 => "clean".to_string(),
+            n => format!("{n} collision(s) — EL_PROJECT CHECK"),
+        },
+    ]);
+    let headers: Vec<&str> = layout.headers.iter().map(|h| h.as_str()).collect();
+    TableLayout::new(&layout.title, &headers, rows)
 }

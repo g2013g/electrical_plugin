@@ -582,6 +582,11 @@ def phase_signals_and_project():
     s.run("EL_SIGNAL STOP DEST 90,200")
     check("a destination arrow joins it", s.count_on(SIGNAL_LAYER) >= 6, f"{s.count_on(SIGNAL_LAYER)} on {SIGNAL_LAYER}")
 
+    # The extract: a device and numbered wires, so the register can check
+    # cross-sheet collisions.
+    s.run("EL_COMPONENT K K1 60,190")
+    s.run("EL_PROJECT SYNC")
+
     text = s.run_and_collect("EL_SIGNAL STOP SOURCE 20,200")
     check("a duplicate arrow is refused", "already exists" in text, text[:200])
     text = s.run_and_collect("EL_SIGNAL NOWIRE SOURCE 50,50")
@@ -608,13 +613,38 @@ def phase_signals_and_project():
     # ── sheet 02: pairing across sessions, through the same folder ──
     s = session()
     s.send({"op": "new"})
-    s.run("EL_SETTINGS SHEET=02 DRAWING=CONTROL WIREMODE=S WIRE_FORMAT=W%N WIRE_START=1")
+    # WIRE_START=101 keeps sheet 02's numbers off sheet 01's — numbering that
+    # collides across sheets is exactly what the register exists to catch.
+    s.run("EL_SETTINGS SHEET=02 DRAWING=CONTROL WIREMODE=S WIRE_FORMAT=W%N WIRE_START=101")
     s.run("EL_WIRE 20,200 90,200")
     s.run("EL_WIRENO")
     s.send({"op": "save", "path": "sheet02.dxf"})
     s.run("EL_PROJECT SET SHEET=02 NAME=CONTROL")
     s.run("EL_SIGNAL STOP DEST 20,200")
+    # The same relay tag sheet 01 already claimed: a cross-sheet collision the
+    # register can see without opening sheet 01.
+    s.run("EL_COMPONENT K K1 60,190")
+    text = s.run_and_collect("EL_PROJECT SYNC")
+    check("syncing a colliding tag says so", "collision" in text and "K1" in text, text[:250])
+
+    text = s.run_and_collect("EL_PROJECT CHECK")
+    check("CHECK names the colliding sheets", "K1" in text and "01, 02" in text, text[:250])
+
+    s.run("EL_DELETE K1")
+    s.run("EL_COMPONENT K K2 60,190")
+    text = s.run_and_collect("EL_PROJECT SYNC")
+    # A clean check is output-only, which serve does not surface; a collision
+    # is an error, which it does. Absence of the error IS the clean verdict.
+    check("a re-sync after the fix is clean", "collision" not in text, text[:250])
     s.run("EL_PROJECT SYNC")
+
+    # The drawing list reads the register: both sheets, and the verdict.
+    # (FORCE: the test wires are dangling by design, and a dangling wire is a
+    # DRC error that would otherwise block the export.)
+    s.run("EL_REPORT DRAWINGLIST dl.csv FORCE")
+    dl = read(os.path.join(WORK, "dl.csv")).replace("\r\n", "\n")
+    check("the drawing list names the project sheets", "Project drawing" in dl and "sheet 01" in dl and "sheet 02" in dl, dl[:300])
+    check("the drawing list carries the collision verdict", "Cross-sheet check" in dl and "clean" in dl, dl[-300:])
 
     reg = read(os.path.join(WORK, "el-project.json"))
     check("the source survives sheet 02's sync", '"source_sheet": "01"' in reg, reg[:200])
@@ -628,7 +658,7 @@ def phase_signals_and_project():
 
     # An arrow anchored to a wire end follows a trim of that end.
     s.run("EL_SIGNAL STOP SOURCE 20,200")
-    s.run("EL_TRIMWIRE W1 25,200")
+    s.run("EL_TRIMWIRE W101 25,200")
     ents = s.send({"op": "query", "layer": SIGNAL_LAYER, "limit": 50}).get("entities", [])
     xs = [v for e in ents for v in (e.get("vertices") or [])]
     moved = any(abs(v[0] - 25.0) < 1e-6 or abs(v[0] - 19.0) < 1e-6 for v in xs)

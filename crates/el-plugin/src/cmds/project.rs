@@ -87,6 +87,7 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
         Some("NEW") => new_project(host, &idx, &a, existing),
         Some("SET") => set(host, &idx, &a, existing),
         Some("SYNC") => sync(host, &idx, existing),
+        Some("CHECK") => check(host, existing.as_ref()),
         Some("PATH") => match path_of(host) {
             Some(p) => host.push_output(&format!(
                 "EL_PROJECT: {}{}",
@@ -98,7 +99,7 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
             ),
         },
         Some(other) => host.push_error(&format!(
-            "EL_PROJECT: unknown action {other:?} — try NEW, SET, SYNC, PATH, or bare to show"
+            "EL_PROJECT: unknown action {other:?} — try NEW, SET, SYNC, CHECK, PATH, or bare to show"
         )),
     }
 }
@@ -128,6 +129,19 @@ fn show(host: &mut dyn HostApi, project: Option<&Project>) {
             }
         ));
     }
+    for e in &p.extracts {
+        host.push_output(&format!(
+            "  sheet {} holds {} tag(s), {} wire number(s) ({} sync)",
+            dash(&e.sheet),
+            e.tags.len(),
+            e.wire_numbers.len(),
+            if e.tags.is_empty() && e.wire_numbers.is_empty() {
+                "empty"
+            } else {
+                "latest"
+            }
+        ));
+    }
     for s in &p.signals {
         host.push_output(&format!(
             "  signal {} — source {} dest {}",
@@ -140,6 +154,69 @@ fn show(host: &mut dyn HostApi, project: Option<&Project>) {
             }
         ));
     }
+    report_conflicts(host, p);
+}
+
+/// The register's whole cross-sheet payoff: the same tag or wire number on
+/// two sheets is a collision every cross-reference and report will conflate.
+fn report_conflicts(host: &mut dyn HostApi, p: &Project) {
+    let tag_conflicts = p.tag_conflicts();
+    let wire_conflicts = p.wire_number_conflicts();
+    if tag_conflicts.is_empty() && wire_conflicts.is_empty() {
+        host.push_output("  cross-sheet check: clean (no tag or wire-number collisions)");
+        return;
+    }
+    host.push_error(&format!(
+        "EL_PROJECT: {} cross-sheet collision(s) — EL_PROJECT CHECK lists them",
+        tag_conflicts.len() + wire_conflicts.len()
+    ));
+}
+
+/// `EL_PROJECT CHECK` — name every cross-sheet tag and wire-number collision.
+fn check(host: &mut dyn HostApi, project: Option<&Project>) {
+    let Some(p) = project else {
+        host.push_error("EL_PROJECT: no project to check — EL_PROJECT NEW first");
+        return;
+    };
+    let tag_conflicts = p.tag_conflicts();
+    let wire_conflicts = p.wire_number_conflicts();
+    if tag_conflicts.is_empty() && wire_conflicts.is_empty() {
+        host.push_output(&format!(
+            "EL_PROJECT CHECK: clean — {} sheet(s) checked, no tag or wire-number collisions",
+            p.extracts.len()
+        ));
+        return;
+    }
+    // The summary takes the error channel deliberately: a collision is a real
+    // defect, and in a headless session the error channel is the only one that
+    // answers. The full list follows as output.
+    let mut first = String::new();
+    if let Some((tag, sheets)) = tag_conflicts.first() {
+        first = format!("first: tag {tag} on sheets {}", sheets.join(", "));
+    } else if let Some((number, sheets)) = wire_conflicts.first() {
+        first = format!(
+            "first: wire number {number} on sheets {}",
+            sheets.join(", ")
+        );
+    }
+    host.push_error(&format!(
+        "EL_PROJECT CHECK: {} tag and {} wire-number collision(s) across {} sheet(s); {first}",
+        tag_conflicts.len(),
+        wire_conflicts.len(),
+        p.extracts.len()
+    ));
+    for (tag, sheets) in &tag_conflicts {
+        host.push_output(&format!("  tag {tag} on sheets {}", sheets.join(", ")));
+    }
+    for (number, sheets) in &wire_conflicts {
+        host.push_output(&format!(
+            "  wire number {number} on sheets {}",
+            sheets.join(", ")
+        ));
+    }
+    host.push_info(
+        "  a collision means two sheets claim the same designator — retag or renumber one of them",
+    );
 }
 
 fn dash(s: &str) -> String {
@@ -238,6 +315,28 @@ fn sync(host: &mut dyn HostApi, idx: &el_core::ElIndex, existing: Option<Project
         }
         project.sync_signal(&sheet, &s.rec.name, s.rec.direction == el_core::model::SignalDirection::Source);
     }
+
+    // The extract: what THIS sheet holds, so cross-sheet collisions are
+    // visible without opening the other drawing. Parents only — a child
+    // contact shares its parent's tag by design.
+    let mut tags: Vec<String> = idx
+        .components
+        .values()
+        .filter(|c| !c.rec.is_child && !c.rec.tag.is_empty())
+        .map(|c| c.rec.tag.clone())
+        .collect();
+    tags.sort();
+    tags.dedup();
+    let mut wire_numbers: Vec<String> = idx
+        .wires
+        .values()
+        .filter(|w| !w.rec.wire_ref.is_empty())
+        .map(|w| w.rec.wire_ref.clone())
+        .collect();
+    wire_numbers.sort();
+    wire_numbers.dedup();
+    project.sync_extract(&sheet, tags, wire_numbers);
+
     match save(host, &project) {
         Ok(p) => host.push_output(&format!(
             "EL_PROJECT: {count} arrow(s) from sheet {sheet} registered ({})",
@@ -248,6 +347,10 @@ fn sync(host: &mut dyn HostApi, idx: &el_core::ElIndex, existing: Option<Project
             return;
         }
     }
+
+    // The sync is the natural moment to say what the register now knows —
+    // including whether this sheet just collided with another one.
+    check(host, Some(&project));
 
     // The register just learned where things pair; the arrows are a render, so
     // rebuild them with the fresh notes.
