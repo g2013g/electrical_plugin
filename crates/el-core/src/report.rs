@@ -34,6 +34,7 @@ pub enum ReportKind {
     /// Terminals by strip.
     TerminalPlan,
     PanelBom,
+    PlcIo,
     /// Cables and their conductors.
     CableSummary,
     /// Devices that cannot be ordered as drawn.
@@ -47,13 +48,14 @@ pub enum ReportKind {
 }
 
 impl ReportKind {
-    pub const ALL: [ReportKind; 10] = [
+    pub const ALL: [ReportKind; 11] = [
         ReportKind::Bom,
         ReportKind::Components,
         ReportKind::WireFromTo,
         ReportKind::WireLabels,
         ReportKind::TerminalPlan,
         ReportKind::PanelBom,
+        ReportKind::PlcIo,
         ReportKind::CableSummary,
         ReportKind::MissingCatalog,
         ReportKind::DrawingList,
@@ -67,6 +69,7 @@ impl ReportKind {
             ReportKind::WireFromTo => "WIREFROMTO",
             ReportKind::TerminalPlan => "TERMINALS",
             ReportKind::PanelBom => "PANELBOM",
+            ReportKind::PlcIo => "PLCIO",
             ReportKind::CableSummary => "CABLES",
             ReportKind::MissingCatalog => "MISSINGCATALOG",
             ReportKind::WireLabels => "WIRELABELS",
@@ -83,6 +86,7 @@ impl ReportKind {
             "WIRELABELS" | "LABELS" => Some(ReportKind::WireLabels),
             "TERMINALS" | "TERMINALPLAN" | "TERMINAL" => Some(ReportKind::TerminalPlan),
             "PANELBOM" | "PANEL" | "PANELLIST" => Some(ReportKind::PanelBom),
+            "PLCIO" | "PLCIOLIST" => Some(ReportKind::PlcIo),
             "CABLES" | "CABLESUMMARY" | "CABLE" => Some(ReportKind::CableSummary),
             "MISSINGCATALOG" | "MISSING" | "NOCATALOG" => Some(ReportKind::MissingCatalog),
             "DRAWINGLIST" | "DRAWINGS" | "SHEETS" => Some(ReportKind::DrawingList),
@@ -99,6 +103,7 @@ impl ReportKind {
             ReportKind::WireFromTo => "Wire from/to",
             ReportKind::TerminalPlan => "Terminal plan",
             ReportKind::PanelBom => "Panel BOM",
+            ReportKind::PlcIo => "PLC I/O list",
             ReportKind::CableSummary => "Cable summary",
             ReportKind::MissingCatalog => "Missing catalogue data",
             ReportKind::WireLabels => "Wire labels",
@@ -115,6 +120,7 @@ impl ReportKind {
             ReportKind::WireFromTo => "wire-from-to",
             ReportKind::TerminalPlan => "terminal-plan",
             ReportKind::PanelBom => "panel-bom",
+            ReportKind::PlcIo => "plc-io",
             ReportKind::CableSummary => "cable-summary",
             ReportKind::MissingCatalog => "missing-catalog",
             ReportKind::WireLabels => "wire-labels",
@@ -138,6 +144,7 @@ pub fn build(
         ReportKind::WireLabels => wire_labels(idx),
         ReportKind::TerminalPlan => terminal_plan(idx),
         ReportKind::PanelBom => panel_bom(idx),
+        ReportKind::PlcIo => plc_io(idx),
         ReportKind::CableSummary => cable_summary(idx),
         ReportKind::MissingCatalog => missing_catalog(idx, catalog),
         ReportKind::DrawingList => drawing_list(idx, settings),
@@ -384,6 +391,59 @@ pub fn terminal_plan(idx: &ElIndex) -> TableLayout {
     )
 }
 
+
+
+/// PLC I/O list (CH10): one row per module point, its address, the wire on it
+/// and the device that wire reaches — the commissioning cheat sheet.
+pub fn plc_io(idx: &ElIndex) -> TableLayout {
+    let mut rows: Vec<Vec<String>> = Vec::new();
+    let mut mods: Vec<&crate::index::IndexedPlc> = idx.plcs.values().collect();
+    mods.sort_by(|a, b| crate::refdes_cmp(&a.rec.tag, &b.rec.tag));
+    for m in &mods {
+        for (point, addr) in m.rec.addresses() {
+            let node = format!("{}.{}", m.rec.tag, point);
+            // The wire naming this point, and what its far end reaches.
+            let wire = idx
+                .wires
+                .values()
+                .find(|w| {
+                    (w.rec.from_id.eq_ignore_ascii_case(&m.rec.tag)
+                        && w.rec.from_pin.eq_ignore_ascii_case(&point))
+                        || (w.rec.to_id.eq_ignore_ascii_case(&m.rec.tag)
+                            && w.rec.to_pin.eq_ignore_ascii_case(&point))
+                });
+            let (wref, far) = match wire {
+                Some(w) => {
+                    let far_node = if w.rec.from_id.eq_ignore_ascii_case(&m.rec.tag) {
+                        (w.rec.to_id.clone(), w.rec.to_pin.clone())
+                    } else {
+                        (w.rec.from_id.clone(), w.rec.from_pin.clone())
+                    };
+                    let far_label = if far_node.1.is_empty() {
+                        far_node.0
+                    } else {
+                        format!("{}.{}", far_node.0, far_node.1)
+                    };
+                    (
+                        if w.rec.wire_ref.is_empty() {
+                            EMPTY_CELL.to_string()
+                        } else {
+                            w.rec.wire_ref.clone()
+                        },
+                        far_label,
+                    )
+                }
+                None => (EMPTY_CELL.to_string(), EMPTY_CELL.to_string()),
+            };
+            rows.push(vec![addr, node, wref, far]);
+        }
+    }
+    TableLayout::new(
+        &format!("PLC I/O list — {} point(s)", rows.len()),
+        &["ADDRESS", "POINT", "WIRE", "CONNECTS TO"],
+        rows,
+    )
+}
 
 /// Panel BOM (CH8): one row per footprint, keyed by item number — the list a
 /// panel builder assembles from, carrying the schematic's catalog data over

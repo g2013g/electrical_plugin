@@ -159,6 +159,11 @@ fn resolve(
         return Ok((format!("signal {}", s.rec.name), handles, "signal"));
     }
 
+    if let Some(m) = capture.index.plc_by_tag(token) {
+        let handles = capture.index.handles_for_el_id(&m.rec.el_id).to_vec();
+        return Ok((format!("PLC {}", m.rec.tag), handles, "plc"));
+    }
+
     if let Some(t) = capture
         .index
         .terminals
@@ -253,6 +258,10 @@ fn resolve_handle(
             handles.extend(capture.index.handles_for_el_id(&j.rec.el_id).iter().copied());
         }
         return Ok((t.rec.designator(), handles, "terminal"));
+    }
+    if let Some(m) = capture.index.plc_of_handle(handle) {
+        let handles = capture.index.handles_for_el_id(&m.rec.el_id).to_vec();
+        return Ok((format!("PLC {}", m.rec.tag), handles, "plc"));
     }
     if let Some(f) = capture.index.footprint_of_handle(handle) {
         let handles = capture.index.handles_for_el_id(&f.rec.el_id).to_vec();

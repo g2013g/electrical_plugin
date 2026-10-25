@@ -112,6 +112,7 @@ pub enum Target {
     Terminal(TerminalRec),
     Connector(ConnectorRec),
     Signal(SignalRec),
+    Plc(el_core::model::PlcRec),
     Ladder(String),
     Wire(u64),
 }
@@ -149,6 +150,9 @@ pub fn resolve(capture: &Capture, token: &str) -> Result<Target, String> {
     {
         return Ok(Target::Signal(s.rec.clone()));
     }
+    if let Some(m) = capture.index.plc_by_tag(token) {
+        return Ok(Target::Plc(m.rec.clone()));
+    }
     if let Some(l) = capture.index.ladder_by_el_id(token) {
         return Ok(Target::Ladder(l.el_id.clone()));
     }
@@ -177,6 +181,9 @@ fn classify_handle(idx: &ElIndex, handle: u64) -> Result<Target, String> {
     }
     if let Some(s) = idx.signal_of_handle(handle) {
         return Ok(Target::Signal(s.rec.clone()));
+    }
+    if let Some(m) = idx.plc_of_handle(handle) {
+        return Ok(Target::Plc(m.rec.clone()));
     }
     if idx.wires.contains_key(&handle) {
         return Ok(Target::Wire(handle));
@@ -212,6 +219,7 @@ pub fn anchor_of(idx: &ElIndex, target: &Target) -> Result<[f64; 2], String> {
         Target::Terminal(r) => Ok([r.origin_x, r.origin_y]),
         Target::Connector(r) => Ok([r.origin_x, r.origin_y]),
         Target::Signal(r) => Ok([r.origin_x, r.origin_y]),
+        Target::Plc(r) => Ok([r.origin_x, r.origin_y]),
         Target::Ladder(id) => idx
             .ladder_by_el_id(id)
             .map(|l| [l.rec.origin_x, l.rec.origin_y])
@@ -328,6 +336,26 @@ fn transform(
             let what = format!(
                 "{} to ({}, {})",
                 rec.ref_des,
+                el_core::fmt_mm(rec.origin_x),
+                el_core::fmt_mm(rec.origin_y)
+            );
+            (rec.el_id.clone(), parts, record, placement, what)
+        }
+        Target::Plc(rec) => {
+            let mut rec = rec.clone();
+            rec.origin_x = new_origin[0];
+            rec.origin_y = new_origin[1];
+            let record = ElRecord::encode_plc(&rec);
+            let parts = crate::geometry::plc_entities(&record, &rec);
+            let placement = Placement {
+                node_id: rec.tag.clone(),
+                origin: [rec.origin_x, rec.origin_y],
+                rotation_deg: 0.0,
+                kind: attach::PlacementKind::Plc(rec.clone()),
+            };
+            let what = format!(
+                "PLC {} to ({}, {})",
+                rec.tag,
                 el_core::fmt_mm(rec.origin_x),
                 el_core::fmt_mm(rec.origin_y)
             );

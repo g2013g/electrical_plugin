@@ -53,6 +53,7 @@ TERMINAL_LAYER = "EL_TERMINALS"
 CABLE_LAYER = "EL_CABLES"
 SIGNAL_LAYER = "EL_SIGNALS"
 PANEL_LAYER = "EL_PANEL"
+PLC_LAYER = "EL_PLC"
 BALLOON_LAYER = "EL_BALLOONS"
 STRIPS_LAYER = "EL_STRIPS"
 TABLE_LAYER = "EL_TABLE"
@@ -811,6 +812,62 @@ def phase_panel_layout():
     s.close()
 
 
+def phase_plc_modules():
+    print("\n-- PLC modules: parametric cards, addresses, I/O list --")
+    s = session()
+    s.send({"op": "new"})
+    s.run("EL_SETTINGS WIREMODE=S WIRE_FORMAT=W%N WIRE_START=1 TAG_FORMAT=%F%N")
+    # A card and the devices it watches/drives.
+    s.run("EL_COMPONENT S S1 20,230")
+    s.run("EL_COMPONENT K K1 20,190")
+    s.run("EL_PLC P1 8,6 120,205")
+    drawn = s.count_on(PLC_LAYER)
+    check("a parametric module draws its body and points", drawn >= 10, f"{drawn} on {PLC_LAYER}")
+
+    # Points are ordinary pins: wires land by name.
+    s.run("EL_WIRE FROM=S1.1 TO=P1.I1")
+    s.run("EL_WIRE FROM=P1.Q1 TO=K1.A1")
+    s.run("EL_WIRENO")
+    text = s.run_and_collect("EL_WIRE FROM=S1.1 TO=P1.I99")
+    check("an unknown point is refused with the point list", "has no point" in text, text[:200])
+
+    # Addresses: I0.0-style by default; the I/O list reads them back.
+    s.run("EL_REPORT PLCIO io.csv FORCE")
+    io = read(os.path.join(WORK, "io.csv")).replace("\r\n", "\n")
+    check("the I/O list covers every point", io.count(",P1.I") + io.count(",P1.Q") == 14, io[:300])
+    check("points carry addresses", "I0.0" in io and "Q0.5" in io, io[:200])
+    check("wired points name their wire and far end", "S1" in io and "K1.A1" in io, io[:300])
+
+    # EDIT regenerates: new counts renumber, BASE re-addresses.
+    s.run("EL_PLC EDIT P1 DI=4")
+    s.run("EL_REPORT PLCIO io2.csv FORCE")
+    io2 = read(os.path.join(WORK, "io2.csv")).replace("\r\n", "\n")
+    check("editing counts regenerates the module", io2.count(",P1.I") + io2.count(",P1.Q") == 10, io2[:200])
+    s.run("EL_PLC EDIT P1 BASEI=I:2/")
+    s.run("EL_REPORT PLCIO io3.csv FORCE")
+    io3 = read(os.path.join(WORK, "io3.csv")).replace("\r\n", "\n")
+    check("a new BASE re-addresses the rail", "I:2/0" in io3, io3[:200])
+
+    # A second module on the same base collides; a distinct base is clean.
+    s.run("EL_PLC P2 4,4 200,205")
+    r = s.run("EL_AUDIT")
+    check("two modules on one address base collide", "PLC_DUP_ADDRESS" in json.dumps(r), json.dumps(r)[:200])
+    s.run("EL_PLC EDIT P2 BASEI=I:3/ BASEQ=Q:3/")
+    r = s.run("EL_AUDIT")
+    check("distinct bases audit clean", "PLC_DUP_ADDRESS" not in json.dumps(r), json.dumps(r)[:200])
+
+    # Move regenerates and re-seats the attached wires.
+    wires_before = s.count_on(WIRE_LAYER)
+    s.run("EL_MOVE P1 150,205")
+    check("moving a module keeps its wires", s.count_on(WIRE_LAYER) == wires_before)
+    r = s.run("EL_AUDIT")
+    check("wires still land on their points after the move", "WIRE_DANGLING" not in json.dumps(r), json.dumps(r)[:300])
+
+    s.run("EL_PLC CLEAR P2")
+    check("CLEAR removes a module", s.count_on(PLC_LAYER) > 0)
+    s.close()
+
+
 def phase_failures_and_cleanup():
     print("\n── failure reporting and cleanup ──")
     s = session()
@@ -1542,6 +1599,7 @@ def main():
     phase_terminal_jumpers()
     phase_strip_editor()
     phase_panel_layout()
+    phase_plc_modules()
     phase_failures_and_cleanup()
     phase_library()
     phase_components()

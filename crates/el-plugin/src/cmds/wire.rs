@@ -160,6 +160,22 @@ pub fn resolve_node(
                     x.rec.pins.join(",")
                 )
             })
+    } else if let Some(m) = idx.plcs.values().find(|m| m.rec.tag.eq_ignore_ascii_case(node)) {
+        let wanted = pin.clone().unwrap_or_default();
+        let point = if wanted.is_empty() {
+            m.rec.point_names().into_iter().next()
+        } else {
+            Some(wanted)
+        };
+        match point.as_deref().and_then(|p| m.rec.point_position(p)) {
+            Some(pt) => Ok([pt[0], pt[1], 0.0]),
+            None => Err(format!(
+                "PLC {} has no point {:?} — its points are {}",
+                m.rec.tag,
+                point.unwrap_or_default(),
+                m.rec.point_names().join(", ")
+            )),
+        }
     } else if idx.wire_by_ref(node).is_some() {
         Err(format!("{node} is a wire number, not a connection point"))
     } else {
@@ -222,6 +238,16 @@ pub fn nearest_node(
         for p in &x.rec.pins {
             if let Some(pt) = x.rec.pin_point_in_drawing(p) {
                 consider(format!("{}.{}", x.rec.ref_des, p), [pt[0], pt[1], 0.0]);
+            }
+        }
+    }
+    for m in idx.plcs.values() {
+        if m.rec.tag.is_empty() {
+            continue;
+        }
+        for p in &m.rec.point_names() {
+            if let Some(pt) = m.rec.point_position(p) {
+                consider(format!("{}.{}", m.rec.tag, p), [pt[0], pt[1], 0.0]);
             }
         }
     }

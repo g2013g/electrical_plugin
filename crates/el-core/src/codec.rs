@@ -394,6 +394,45 @@ impl ElRecord {
         Ok(rec)
     }
 
+    // ── PLC ──────────────────────────────────────────────────────────────
+
+    pub fn encode_plc(rec: &PlcRec) -> ElRecord {
+        let mut r = ElRecord::new(KIND_PLC, &rec.el_id);
+        r.put_str("TAG", &rec.tag);
+        r.put_real("OX", rec.origin_x);
+        r.put_real("OY", rec.origin_y);
+        r.put_int("DI", rec.di);
+        r.put_int("DO", rec.do_);
+        r.put_str("BASEI", &rec.base_i);
+        r.put_str("BASEQ", &rec.base_q);
+        r.put_str("DESC", &rec.description);
+        r.put_str("MFG", &rec.mfg);
+        r.put_str("CAT", &rec.cat);
+        r
+    }
+
+    pub fn decode_plc(&self) -> Result<PlcRec, DecodeError> {
+        self.check_schema()?;
+        let el_id = self
+            .el_id()
+            .ok_or_else(|| DecodeError("missing ELID key".to_string()))?
+            .to_string();
+        let mut rec = PlcRec::new(
+            &el_id,
+            self.get_str("TAG").unwrap_or(""),
+            self.get_int("DI").unwrap_or(0),
+            self.get_int("DO").unwrap_or(0),
+        );
+        rec.origin_x = self.get_real("OX").unwrap_or(0.0);
+        rec.origin_y = self.get_real("OY").unwrap_or(0.0);
+        rec.base_i = self.get_str("BASEI").unwrap_or(&rec.base_i).to_string();
+        rec.base_q = self.get_str("BASEQ").unwrap_or(&rec.base_q).to_string();
+        rec.description = self.get_str("DESC").unwrap_or("").to_string();
+        rec.mfg = self.get_str("MFG").unwrap_or("").to_string();
+        rec.cat = self.get_str("CAT").unwrap_or("").to_string();
+        Ok(rec)
+    }
+
     // ── component ────────────────────────────────────────────────────────
 
     pub fn encode_component(rec: &ElComponentRec) -> ElRecord {

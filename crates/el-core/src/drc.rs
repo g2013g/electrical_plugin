@@ -252,6 +252,55 @@ pub fn check(idx: &ElIndex, catalog: Option<&Catalog>) -> Vec<Issue> {
         }
     }
 
+    // ── PLC modules ───────────────────────────────────────────────────────
+    {
+        let mut seen_tags: BTreeMap<String, String> = BTreeMap::new();
+        let mut seen_addrs: BTreeMap<String, String> = BTreeMap::new();
+        for m in idx.plcs.values() {
+            let label = format!("PLC {}", m.rec.tag);
+            if m.rec.tag.is_empty() {
+                issues.push(Issue::error(
+                    "PLC_NO_TAG",
+                    "a PLC module carries no tag — its points can never be named",
+                ));
+                continue;
+            }
+            if seen_tags.insert(m.rec.tag.to_ascii_uppercase(), m.rec.el_id.clone()).is_some() {
+                issues.push(Issue::error(
+                    "PLC_DUP_TAG",
+                    format!("more than one PLC module is tagged {}", m.rec.tag),
+                ));
+            }
+            if m.rec.di <= 0 && m.rec.do_ <= 0 {
+                issues.push(Issue::error(
+                    "PLC_NO_POINTS",
+                    format!("{label} has no input and no output points"),
+                ));
+            }
+            // Two modules claiming the same address is two wires that will
+            // read as one signal in the field.
+            for (_, addr) in m.rec.addresses() {
+                if seen_addrs.insert(addr.clone(), m.rec.el_id.clone()).is_some() {
+                    issues.push(Issue::error(
+                        "PLC_DUP_ADDRESS",
+                        format!("PLC address {addr} is carried by more than one module — give one module a different BASE"),
+                    ));
+                }
+            }
+            let wired = idx
+                .wires
+                .values()
+                .any(|w| w.rec.from_id.eq_ignore_ascii_case(&m.rec.tag)
+                    || w.rec.to_id.eq_ignore_ascii_case(&m.rec.tag));
+            if !wired {
+                issues.push(Issue::warning(
+                    "PLC_NO_WIRES",
+                    format!("{label} has no wires on any point"),
+                ));
+            }
+        }
+    }
+
     // ── panel footprints ──────────────────────────────────────────────────
     {
         let mut seen_tags: BTreeMap<String, String> = BTreeMap::new();

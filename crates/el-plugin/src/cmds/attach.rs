@@ -26,6 +26,7 @@ pub enum PlacementKind {
     Component(SymbolDef),
     Terminal,
     Connector(ConnectorRec),
+    Plc(el_core::model::PlcRec),
 }
 
 /// Where an object now sits, and what it is.
@@ -77,6 +78,17 @@ impl Placement {
                     rec.pin_position(first, self.origin, self.rotation_deg.to_radians())
                         .map(|p| [p[0], p[1], 0.0])
                 }),
+            PlacementKind::Plc(rec) => {
+                let name = if pin.is_empty() {
+                    rec.point_names().first().cloned()?
+                } else {
+                    pin.to_string()
+                };
+                // The record's own origin is authoritative: the module was
+                // just moved and the index snapshot is stale.
+                let p = rec.point_position(&name)?;
+                Some([p[0], p[1], 0.0])
+            }
         }
     }
 }

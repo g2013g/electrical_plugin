@@ -39,6 +39,7 @@ pub const KIND_SIGNAL: &str = "signal";
 pub const KIND_JUMPER: &str = "jumper";
 pub const KIND_STRIPPLOT: &str = "stripplot";
 pub const KIND_FOOTPRINT: &str = "footprint";
+pub const KIND_PLC: &str = "plc";
 pub const KIND_XREF: &str = "xref";
 
 // ── drawing layers ───────────────────────────────────────────────────────
@@ -57,6 +58,7 @@ pub const LAYER_CABLES: &str = "EL_CABLES";
 pub const LAYER_SIGNALS: &str = "EL_SIGNALS";
 pub const LAYER_STRIPS: &str = "EL_STRIPS";
 pub const LAYER_PANEL: &str = "EL_PANEL";
+pub const LAYER_PLC: &str = "EL_PLC";
 pub const LAYER_BALLOONS: &str = "EL_BALLOONS";
 pub const LAYER_TABLE: &str = "EL_TABLE";
 
@@ -388,6 +390,110 @@ impl TerminalRec {
     }
 }
 
+
+
+// ── PLC module record ────────────────────────────────────────────────────
+
+/// One parametric PLC I/O module (textbook CH10): a box of `di` input points
+/// on the left rail and `do` output points on the right, **generated from the
+/// counts** — which is what makes a 16-point card one command.
+///
+/// Points are named `I1..In` / `Q1..Qn` and addressed `BASE + index` (`I0.0`
+/// style by default; `BASE=I:1/` gives the rack:slot style). A wire names a
+/// point exactly as it names any other pin (`FROM=P1.I3`), so connectivity,
+/// reports and audit work through the standing machinery.
+#[derive(Debug, Clone, PartialEq)]
+pub struct PlcRec {
+    pub el_id: String,
+    pub tag: String,
+    pub origin_x: f64,
+    pub origin_y: f64,
+    /// Digital input point count.
+    pub di: i32,
+    /// Digital output point count.
+    pub do_: i32,
+    /// Address prefix for inputs (default `I0.` → I0.0, I0.1, …).
+    pub base_i: String,
+    /// Address prefix for outputs (default `Q0.`).
+    pub base_q: String,
+    pub description: String,
+    pub mfg: String,
+    pub cat: String,
+}
+
+impl PlcRec {
+    pub fn new(el_id: &str, tag: &str, di: i32, do_: i32) -> Self {
+        PlcRec {
+            el_id: el_id.to_string(),
+            tag: tag.to_string(),
+            origin_x: 0.0,
+            origin_y: 0.0,
+            di,
+            do_,
+            base_i: "I0.".to_string(),
+            base_q: "Q0.".to_string(),
+            description: String::new(),
+            mfg: String::new(),
+            cat: String::new(),
+        }
+    }
+
+    /// Every point name, inputs then outputs, in rail order.
+    pub fn point_names(&self) -> Vec<String> {
+        let mut out = Vec::new();
+        for i in 1..=self.di.max(0) {
+            out.push(format!("I{i}"));
+        }
+        for i in 1..=self.do_.max(0) {
+            out.push(format!("Q{i}"));
+        }
+        out
+    }
+
+    /// The address a point carries (`P1.I3` → `I0.2` — the third input is
+    /// index 2, because addresses are zero-based the way a PLC numbers them).
+    pub fn address_of(&self, point: &str) -> Option<String> {
+        let (rail, n) = point.split_at(1.max(point.len().min(1)));
+        let idx: i32 = n.parse().ok()?;
+        match rail {
+            "I" if idx >= 1 && idx <= self.di => Some(format!("{}{}", self.base_i, idx - 1)),
+            "Q" if idx >= 1 && idx <= self.do_ => Some(format!("{}{}", self.base_q, idx - 1)),
+            _ => None,
+        }
+    }
+
+    /// The address label for every point, `(point, address)`.
+    pub fn addresses(&self) -> Vec<(String, String)> {
+        self.point_names()
+            .into_iter()
+            .filter_map(|p| self.address_of(&p).map(|a| (p, a)))
+            .collect()
+    }
+
+    /// A point's pin position in the drawing: inputs on the left rail,
+    /// outputs on the right, numbered top to bottom.
+    pub fn point_position(&self, point: &str) -> Option<[f64; 2]> {
+        const ROW: f64 = 6.0;
+        const W: f64 = 40.0;
+        let (rail, n) = point.split_at(1.max(point.len().min(1)));
+        let idx: i32 = n.parse().ok()?;
+        // The taller rail sizes the box; points sit from the top.
+        let rows = self.di.max(self.do_).max(1) as f64;
+        let top = self.origin_y + rows * ROW / 2.0;
+        let y = top - (idx as f64 - 0.5) * ROW;
+        match rail {
+            "I" if idx >= 1 && idx <= self.di => Some([self.origin_x - W / 2.0, y]),
+            "Q" if idx >= 1 && idx <= self.do_ => Some([self.origin_x + W / 2.0, y]),
+            _ => None,
+        }
+    }
+
+    /// Body size `[w, h]` for the drawn module.
+    pub fn body_mm(&self) -> [f64; 2] {
+        const ROW: f64 = 6.0;
+        [40.0, self.di.max(self.do_).max(1) as f64 * ROW]
+    }
+}
 
 // ── footprint record ─────────────────────────────────────────────────────
 

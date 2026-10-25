@@ -120,6 +120,20 @@ impl IndexedJumper {
     }
 }
 
+/// One PLC module, folded like everything else.
+#[derive(Debug, Clone, PartialEq)]
+pub struct IndexedPlc {
+    pub el_id: String,
+    pub rec: PlcRec,
+    pub handles: Vec<u64>,
+}
+
+impl IndexedPlc {
+    pub fn primary(&self) -> u64 {
+        self.handles.first().copied().unwrap_or(0)
+    }
+}
+
 /// One panel footprint, folded like everything else.
 #[derive(Debug, Clone, PartialEq)]
 pub struct IndexedFootprint {
@@ -197,6 +211,8 @@ pub struct ElIndex {
     pub strip_plots: BTreeMap<String, IndexedStripPlot>,
     /// Panel footprints by `el_id`.
     pub footprints: BTreeMap<String, IndexedFootprint>,
+    /// PLC modules by `el_id`.
+    pub plcs: BTreeMap<String, IndexedPlc>,
 
     /// Handles whose record failed to decode, with the reason. Surfaced as an
     /// audit finding rather than swallowed: a corrupt record is a real defect.
@@ -217,6 +233,7 @@ pub struct ElIndex {
     handle_to_jumper: BTreeMap<u64, String>,
     handle_to_strip_plot: BTreeMap<u64, String>,
     handle_to_footprint: BTreeMap<u64, String>,
+    handle_to_plc: BTreeMap<u64, String>,
     cable_parent_by_tag: BTreeMap<String, String>,
     wire_by_ref: BTreeMap<String, u64>,
     /// Which wire each drawn run belongs to. A gapped wire is several polyline
@@ -430,6 +447,22 @@ impl ElIndex {
                     }
                     Err(e) => idx.decode_errors.push((handle, e)),
                 },
+                KIND_PLC => match rec.decode_plc() {
+                    Ok(m) => {
+                        idx.el_id_to_handles.entry(m.el_id.clone()).or_default().push(handle);
+                        idx.handle_to_plc.insert(handle, m.el_id.clone());
+                        idx.plcs
+                            .entry(m.el_id.clone())
+                            .or_insert_with(|| IndexedPlc {
+                                el_id: m.el_id.clone(),
+                                rec: m,
+                                handles: Vec::new(),
+                            })
+                            .handles
+                            .push(handle);
+                    }
+                    Err(e) => idx.decode_errors.push((handle, e)),
+                },
                 // Kinds this build does not implement yet are counted, not
                 // rejected — a newer build's drawing must remain openable.
                 other => *idx.unknown_kinds.entry(other.to_string()).or_insert(0) += 1,
@@ -631,6 +664,18 @@ impl ElIndex {
         self.handle_to_jumper
             .get(&handle)
             .and_then(|id| self.jumpers.get(id))
+    }
+
+    /// The PLC module a drawn part belongs to.
+    pub fn plc_of_handle(&self, handle: u64) -> Option<&IndexedPlc> {
+        self.handle_to_plc.get(&handle).and_then(|id| self.plcs.get(id))
+    }
+
+    /// The module carrying `tag`.
+    pub fn plc_by_tag(&self, tag: &str) -> Option<&IndexedPlc> {
+        self.plcs
+            .values()
+            .find(|m| m.rec.tag.eq_ignore_ascii_case(tag))
     }
 
     /// The footprint a drawn part belongs to.

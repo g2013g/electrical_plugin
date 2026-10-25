@@ -34,6 +34,7 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
         && idx.connectors.is_empty()
         && idx.signals.is_empty()
         && idx.footprints.is_empty()
+        && idx.plcs.is_empty()
         && idx.ladders.is_empty();
     if empty {
         host.push_output("EL_LIST: this drawing has no electrical objects yet");
@@ -119,6 +120,18 @@ fn summary(host: &mut dyn HostApi, idx: &ElIndex) {
     host.push_output(&format!("  connectors    {}", idx.connectors.len()));
     if !idx.signals.is_empty() {
         host.push_output(&format!("  signals       {}", idx.signals.len()));
+    }
+    if !idx.plcs.is_empty() {
+        let points: usize = idx
+            .plcs
+            .values()
+            .map(|m| (m.rec.di + m.rec.do_).max(0) as usize)
+            .sum();
+        host.push_output(&format!(
+            "  plc           {} module(s), {} point(s)",
+            idx.plcs.len(),
+            points
+        ));
     }
     if !idx.footprints.is_empty() {
         let ballooned = idx.footprints.values().filter(|f| f.rec.ballooned).count();

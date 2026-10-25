@@ -1114,3 +1114,62 @@ pub fn balloon_entities(
     parts.push(EntityType::Line(l));
     parts
 }
+
+// ── PLC modules ──────────────────────────────────────────────────────────
+
+/// Build a parametric PLC module: the body, a stub per input point on the
+/// left rail with its address, a stub per output point on the right, and the
+/// tag centred at the top. Every part carries the record; regenerating from
+/// the counts is the whole model.
+pub fn plc_entities(record: &ElRecord, rec: &el_core::model::PlcRec) -> Vec<EntityType> {
+    use el_core::model::LAYER_PLC;
+    const STUB: f64 = 5.0;
+    let [w, h] = rec.body_mm();
+    let (x0, y0) = (rec.origin_x - w / 2.0, rec.origin_y - h / 2.0);
+    let mut parts: Vec<EntityType> = Vec::new();
+
+    let body = LwPolyline::from_points(vec![
+        Vector2::new(x0, y0),
+        Vector2::new(x0 + w, y0),
+        Vector2::new(x0 + w, y0 + h),
+        Vector2::new(x0, y0 + h),
+    ]);
+    let mut body = body;
+    body.is_closed = true;
+    body.common.layer = LAYER_PLC.to_string();
+    attach(record, &mut body.common);
+    parts.push(EntityType::LwPolyline(body));
+
+    let mut tag = label(&rec.tag, [rec.origin_x, y0 + h + 1.0, 0.0], 2.6, LAYER_PLC);
+    tag.attachment_point = AttachmentPoint::BottomCenter;
+    let mut e = EntityType::MText(Box::new(tag));
+    attach(record, e.common_mut());
+    parts.push(e);
+
+    for (point, addr) in rec.addresses() {
+        let Some([px, py]) = rec.point_position(&point) else {
+            continue;
+        };
+        let inward = if point.starts_with('I') { STUB } else { -STUB };
+        let mut l = LwPolyline::from_points(vec![
+            Vector2::new(px, py),
+            Vector2::new(px + inward, py),
+        ]);
+        l.common.layer = LAYER_PLC.to_string();
+        attach(record, &mut l.common);
+        parts.push(EntityType::LwPolyline(l));
+
+        // The address, inside the body beside its stub.
+        let text_x = px + inward * 1.6;
+        let mut m = label(&addr, [text_x, py - 0.8, 0.0], 1.5, LAYER_PLC);
+        m.attachment_point = if point.starts_with('I') {
+            AttachmentPoint::BottomLeft
+        } else {
+            AttachmentPoint::BottomRight
+        };
+        let mut e = EntityType::MText(Box::new(m));
+        attach(record, e.common_mut());
+        parts.push(e);
+    }
+    parts
+}
