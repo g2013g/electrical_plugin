@@ -966,6 +966,44 @@ def phase_circuit_builder():
     s.close()
 
 
+def phase_batch_and_bridge():
+    print("\n-- multiple insert, tag tracing, WH bridge --")
+    s = session()
+    s.send({"op": "new"})
+    s.run("EL_SETTINGS TAG_FORMAT=%F%N WIREMODE=S WIRE_FORMAT=W%N WIRE_START=1")
+    s.run("EL_LADDER 20,220 WIDTH=170 SPACING=10 RUNGS=12 REF=100")
+
+    # Multiple insert: one command, four lamps, four tags down the rungs.
+    text = s.run_and_collect("EL_MINSERT lamp 4 REF=101")
+    lamps = s.count_on(COMPONENT_LAYER)
+    check("multiple insert places 4 devices", lamps >= 12, f"{lamps} parts")
+    s.send({"op": "save", "path": "mi.dxf"})
+    mi = read(os.path.join(WORK, "mi.dxf")).replace("\r\n", "\n")
+    check("each takes its own tag", xdata_pair("TAG", "H1") in mi and xdata_pair("TAG", "H4") in mi)
+
+    # The latent tag-tracing fix: wires record bare tags, EL_HIGHLIGHT
+    # looked up TAG.PIN - now both spellings resolve.
+    s.run("EL_COMPONENT K K1 60,220")
+    s.run("EL_WIRE FROM=K1.A1 TO=H1.1")
+    s.run("EL_WIRENO")
+    s.run("EL_HIGHLIGHT K1")
+    check("a device tag traces its net (bare-tag ends)", s.count_on(HILITE_LAYER) >= 1)
+    s.run("EL_HIGHLIGHT CLEAR")
+
+    # The bridge: numbered, connected wires become a WH wirelist.
+    s.run("EL_COMPONENT K K2 60,200")
+    s.run("EL_WIRE FROM=K2.A1 TO=H2.1")
+    s.run("EL_WIRENO")
+    r = s.run("EL_EXPORT WH")
+    check("the bridge writes the wirelist", r.get("ok") is True, json.dumps(r)[:200])
+    wh = read(os.path.join(WORK, "wh-import.csv")).replace("\r\n", "\n")
+    check("the wirelist carries WH's header", wh.startswith("net,from,from_cav,to,to_cav,gauge,color,type"))
+    rows = [l for l in wh.split("\n") if l and not l.startswith("net,")]
+    check("every numbered wire bridges", len(rows) == 2, f"{len(rows)} rows: {rows}")
+    check("rows carry the named ends and pins", "K1,A1" in wh.replace(",", ",", 1) or "K1,A1" in wh)
+    s.close()
+
+
 def phase_failures_and_cleanup():
     print("\n── failure reporting and cleanup ──")
     s = session()
@@ -1700,6 +1738,7 @@ def main():
     phase_plc_modules()
     phase_titleblock()
     phase_circuit_builder()
+    phase_batch_and_bridge()
     phase_failures_and_cleanup()
     phase_library()
     phase_components()

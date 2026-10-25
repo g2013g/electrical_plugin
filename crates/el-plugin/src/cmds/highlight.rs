@@ -141,9 +141,18 @@ fn find_net<'a>(
         .or_else(|| idx.component_by_tag(token))
     {
         let mut found: Vec<&el_core::net::Net> = Vec::new();
+        // Wires name their nodes two ways: `FROM=K1.A1` records the bare tag
+        // (wire.rs `split_node` strips the pin for the id), while a
+        // hand-named end keeps the pin. Both spellings belong to this device,
+        // so both are tried — pins first, then the bare tag.
         for pin in &comp.rec.pins {
             let node = format!("{}.{}", comp.rec.tag, pin);
             if let Some(n) = nets.net_of_node(&node) {
+                found.push(n);
+            }
+        }
+        if found.is_empty() {
+            if let Some(n) = nets.net_of_node(&comp.rec.tag) {
                 found.push(n);
             }
         }

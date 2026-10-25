@@ -10,6 +10,8 @@ pub mod component;
 pub mod connector;
 pub mod delete;
 pub mod edit;
+pub mod export;
+pub mod minsert;
 pub mod highlight;
 pub mod info;
 pub mod ladder;

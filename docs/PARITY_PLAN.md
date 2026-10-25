@@ -15,7 +15,7 @@ this queue:
 | 2 Projects & drawings | project manager, per-drawing props | **T2** register + extracts ✓ (retag orchestration pending) |
 | 3 Wires | types, numbering, gaps/trim | wire types ✓, dual numbering ✓, **gaps + trim ✓** |
 | 4 Ladders | — | ladders + rungs ✓ |
-| 5 Schematic components | icon menu, parent/child, catalog | **expanded icon set ✓ (52 symbols)**, links/xrefs ✓, catalog ✓; multiple-insert & swap pending |
+| 5 Schematic components | icon menu, parent/child, catalog | **expanded icon set ✓ (52 symbols)**, links/xrefs ✓, catalog ✓, **multiple-insert ✓ (`EL_MINSERT`)**; swap/update pending |
 | 6 Schematic editing | move/copy/retag/audit | move/rotate/retag ✓, audit ✓, **GUI hang fixed** |
 | 7 Connectors & circuits | parametric connectors, circuit builder | connectors ✓; **circuit builder landed 2026-10-25**: `EL_CIRCUIT start-stop / dol / fwd-rev` — table-driven templates, slot-key link resolution (shared parent tags stay unambiguous), family tag allocation, prewired named-pin wires. Remaining: spreadsheet-driven template authoring, more circuits. |
 | 8 Panel layouts | footprints, balloons | **absent (T4)** |
@@ -68,7 +68,7 @@ deliberately, never bare.**
 | T8 | Circuit builder: parametric circuit templates with retag/renumber | Circuit Builder | absent |
 | T9 | Report configurability + project-wide report merge; XLS output | Report generator | 9 fixed kinds exist |
 | T10 | Catalog depth: multi-mfr per device, live parts search (reuse WH `mouser.rs`) | Catalog database | partial |
-| T11 | EL→WH bridge: netlist CSV the wiring-harness `WH_IMPORT` consumes | (ACADE→Inventor C&H) | absent; strategic differentiator — both ends are ours |
+| T11 | EL→WH bridge: netlist CSV the wiring-harness `WH_IMPORT` consumes | (ACADE→Inventor C&H) | **landed 2026-10-25: `EL_EXPORT WH`** — numbered connected wires → WH wirelist CSV; also `EL_HIGHLIGHT <tag>` bare-tag fallback fixed (bare TAG ends now trace) |
 | T12 | Hygiene: git init (the tree is unversioned), README ABI refresh to v2026.42 | — | quick win, do first |
 
 ## Ground rules (do not violate)
