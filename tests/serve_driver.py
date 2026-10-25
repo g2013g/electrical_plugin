@@ -54,6 +54,7 @@ CABLE_LAYER = "EL_CABLES"
 SIGNAL_LAYER = "EL_SIGNALS"
 PANEL_LAYER = "EL_PANEL"
 PLC_LAYER = "EL_PLC"
+TB_LAYER = "EL_TITLEBLOCK"
 BALLOON_LAYER = "EL_BALLOONS"
 STRIPS_LAYER = "EL_STRIPS"
 TABLE_LAYER = "EL_TABLE"
@@ -868,6 +869,55 @@ def phase_plc_modules():
     s.close()
 
 
+def phase_titleblock():
+    print("\n-- title block: frame, live fields, update --")
+    # The register is shared through the work folder; a leftover project from
+    # an earlier phase would supply its own OF n and break the field checks.
+    for stale in ["el-project.json", "tb1.dxf", "tb2.dxf", "tb3.dxf"]:
+        try:
+            os.remove(os.path.join(WORK, stale))
+        except OSError:
+            pass
+    s = session()
+    s.send({"op": "new"})
+    s.run("EL_SETTINGS SHEET=02 DRAWING=MAIN-01 INST=PLANT1 LOC=A")
+    s.run("EL_LADDER 20,200 WIDTH=170 SPACING=10 RUNGS=4 REF=100")
+
+    s.run("EL_TITLEBLOCK TITLE=Conveyor+Control DRAWN=GANesh DATE=2026-10-25")
+    tb = s.count_on(TB_LAYER)
+    check("the frame and title table draw", tb >= 10, f"{tb} on {TB_LAYER}")
+
+    # Fields render from the records: settings + overrides, in the file.
+    s.send({"op": "save", "path": "tb1.dxf"})
+    txt = read(os.path.join(WORK, "tb1.dxf")).replace("\r\n", "\n")
+    check("the title renders", "Conveyor Control" in txt)
+    check("the sheet renders from settings", "02 OF 1" in txt)
+    check("drawing and drawn-by render", "MAIN-01" in txt and "GANesh 2026-10-25" in txt)
+    check("inst/loc render", "PLANT1/A" in txt)
+
+    # UPDATE re-renders after a settings change - the CH12 workflow.
+    s.run("EL_SETTINGS SHEET=03")
+    s.run("EL_TITLEBLOCK UPDATE")
+    s.send({"op": "save", "path": "tb2.dxf"})
+    txt2 = read(os.path.join(WORK, "tb2.dxf")).replace("\r\n", "\n")
+    check("UPDATE picks up the new sheet", "03 OF 1" in txt2 and "02 OF 1" not in txt2, txt2[-200:])
+
+    # A project register supplies the OF n count.
+    s.run("EL_PROJECT NEW TB-PROJ")
+    s.run("EL_PROJECT SET ADD=dummy SHEET=01 NAME=OTHER")
+    s.run("EL_TITLEBLOCK UPDATE")
+    s.send({"op": "save", "path": "tb3.dxf"})
+    txt3 = read(os.path.join(WORK, "tb3.dxf")).replace("\r\n", "\n")
+    check("the register supplies the sheet count", "03 OF 2" in txt3, txt3[-200:])
+
+    # Re-place replaces; CLEAR removes.
+    s.run("EL_TITLEBLOCK TITLE=Only+One")
+    check("re-placing replaces the block", s.count_on(TB_LAYER) == tb, f"{tb} entities kept")
+    s.run("EL_TITLEBLOCK CLEAR")
+    check("CLEAR removes the block", s.count_on(TB_LAYER) == 0)
+    s.close()
+
+
 def phase_failures_and_cleanup():
     print("\n── failure reporting and cleanup ──")
     s = session()
@@ -1600,6 +1650,7 @@ def main():
     phase_strip_editor()
     phase_panel_layout()
     phase_plc_modules()
+    phase_titleblock()
     phase_failures_and_cleanup()
     phase_library()
     phase_components()

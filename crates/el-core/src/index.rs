@@ -120,6 +120,14 @@ impl IndexedJumper {
     }
 }
 
+/// The drawing's title block — one per drawing, folded like everything else.
+#[derive(Debug, Clone, PartialEq)]
+pub struct IndexedTitleBlock {
+    pub el_id: String,
+    pub rec: TitleBlockRec,
+    pub handles: Vec<u64>,
+}
+
 /// One PLC module, folded like everything else.
 #[derive(Debug, Clone, PartialEq)]
 pub struct IndexedPlc {
@@ -213,6 +221,8 @@ pub struct ElIndex {
     pub footprints: BTreeMap<String, IndexedFootprint>,
     /// PLC modules by `el_id`.
     pub plcs: BTreeMap<String, IndexedPlc>,
+    /// The title block, if the drawing has one.
+    pub title_block: Option<IndexedTitleBlock>,
 
     /// Handles whose record failed to decode, with the reason. Surfaced as an
     /// audit finding rather than swallowed: a corrupt record is a real defect.
@@ -234,6 +244,7 @@ pub struct ElIndex {
     handle_to_strip_plot: BTreeMap<u64, String>,
     handle_to_footprint: BTreeMap<u64, String>,
     handle_to_plc: BTreeMap<u64, String>,
+    handle_to_titleblock: BTreeMap<u64, String>,
     cable_parent_by_tag: BTreeMap<String, String>,
     wire_by_ref: BTreeMap<String, u64>,
     /// Which wire each drawn run belongs to. A gapped wire is several polyline
@@ -444,6 +455,19 @@ impl ElIndex {
                             })
                             .handles
                             .push(handle);
+                    }
+                    Err(e) => idx.decode_errors.push((handle, e)),
+                },
+                KIND_TITLEBLOCK => match rec.decode_titleblock() {
+                    Ok(t) => {
+                        idx.el_id_to_handles.entry(t.el_id.clone()).or_default().push(handle);
+                        idx.handle_to_titleblock.insert(handle, t.el_id.clone());
+                        let entry = idx.title_block.get_or_insert(IndexedTitleBlock {
+                            el_id: t.el_id.clone(),
+                            rec: t,
+                            handles: Vec::new(),
+                        });
+                        entry.handles.push(handle);
                     }
                     Err(e) => idx.decode_errors.push((handle, e)),
                 },
@@ -664,6 +688,17 @@ impl ElIndex {
         self.handle_to_jumper
             .get(&handle)
             .and_then(|id| self.jumpers.get(id))
+    }
+
+    /// The title block a drawn part belongs to.
+    pub fn titleblock_of_handle(&self, handle: u64) -> Option<&IndexedTitleBlock> {
+        self.handle_to_titleblock
+            .get(&handle)
+            .and_then(|id| {
+                self.title_block
+                    .as_ref()
+                    .filter(|t| &t.el_id == id)
+            })
     }
 
     /// The PLC module a drawn part belongs to.

@@ -259,6 +259,10 @@ fn resolve_handle(
         }
         return Ok((t.rec.designator(), handles, "terminal"));
     }
+    if let Some(t) = capture.index.titleblock_of_handle(handle) {
+        let handles = capture.index.handles_for_el_id(&t.rec.el_id).to_vec();
+        return Ok(("title block".to_string(), handles, "titleblock"));
+    }
     if let Some(m) = capture.index.plc_of_handle(handle) {
         let handles = capture.index.handles_for_el_id(&m.rec.el_id).to_vec();
         return Ok((format!("PLC {}", m.rec.tag), handles, "plc"));

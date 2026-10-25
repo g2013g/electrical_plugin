@@ -40,6 +40,7 @@ pub const KIND_JUMPER: &str = "jumper";
 pub const KIND_STRIPPLOT: &str = "stripplot";
 pub const KIND_FOOTPRINT: &str = "footprint";
 pub const KIND_PLC: &str = "plc";
+pub const KIND_TITLEBLOCK: &str = "titleblock";
 pub const KIND_XREF: &str = "xref";
 
 // ── drawing layers ───────────────────────────────────────────────────────
@@ -59,6 +60,7 @@ pub const LAYER_SIGNALS: &str = "EL_SIGNALS";
 pub const LAYER_STRIPS: &str = "EL_STRIPS";
 pub const LAYER_PANEL: &str = "EL_PANEL";
 pub const LAYER_PLC: &str = "EL_PLC";
+pub const LAYER_TITLEBLOCK: &str = "EL_TITLEBLOCK";
 pub const LAYER_BALLOONS: &str = "EL_BALLOONS";
 pub const LAYER_TABLE: &str = "EL_TABLE";
 
@@ -391,6 +393,48 @@ impl TerminalRec {
 }
 
 
+
+
+// ── title block record ───────────────────────────────────────────────────
+
+/// The drawing's title block: a border frame around the drawing and the
+/// title table bottom-right. **Fields are a render**: sheet / drawing /
+/// installation / location / revision come from the settings record, the
+/// sheet count from the project register when one exists — `EL_TITLEBLOCK
+/// UPDATE` re-renders after any of them change, which is the plugin's
+/// equivalent of ACADE's title-block update pushing drawing properties into
+/// the mapped attributes. Only the placement and the per-sheet overrides a
+/// settings record cannot carry (title text, drawn-by, date, approvals) live
+/// here.
+#[derive(Debug, Clone, PartialEq)]
+pub struct TitleBlockRec {
+    pub el_id: String,
+    /// The frame's lower-left corner. The frame size derives from the
+    /// drawing's extents at render time, so the block follows the drawing.
+    pub origin_x: f64,
+    pub origin_y: f64,
+    pub title: String,
+    pub drawn_by: String,
+    pub date: String,
+    pub approved: String,
+    /// The `n` in `SHEET x OF n` when no project register says otherwise.
+    pub sheet_of: i32,
+}
+
+impl TitleBlockRec {
+    pub fn new(el_id: &str) -> Self {
+        TitleBlockRec {
+            el_id: el_id.to_string(),
+            origin_x: 0.0,
+            origin_y: 0.0,
+            title: String::new(),
+            drawn_by: String::new(),
+            date: String::new(),
+            approved: String::new(),
+            sheet_of: 0,
+        }
+    }
+}
 
 // ── PLC module record ────────────────────────────────────────────────────
 

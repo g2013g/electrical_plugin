@@ -433,6 +433,37 @@ impl ElRecord {
         Ok(rec)
     }
 
+    // ── title block ──────────────────────────────────────────────────────
+
+    pub fn encode_titleblock(rec: &TitleBlockRec) -> ElRecord {
+        let mut r = ElRecord::new(KIND_TITLEBLOCK, &rec.el_id);
+        r.put_real("OX", rec.origin_x);
+        r.put_real("OY", rec.origin_y);
+        r.put_str("TITLE", &rec.title);
+        r.put_str("DRAWN", &rec.drawn_by);
+        r.put_str("DATE", &rec.date);
+        r.put_str("APPR", &rec.approved);
+        r.put_int("SHEETS", rec.sheet_of);
+        r
+    }
+
+    pub fn decode_titleblock(&self) -> Result<TitleBlockRec, DecodeError> {
+        self.check_schema()?;
+        let el_id = self
+            .el_id()
+            .ok_or_else(|| DecodeError("missing ELID key".to_string()))?
+            .to_string();
+        let mut rec = TitleBlockRec::new(&el_id);
+        rec.origin_x = self.get_real("OX").unwrap_or(0.0);
+        rec.origin_y = self.get_real("OY").unwrap_or(0.0);
+        rec.title = self.get_str("TITLE").unwrap_or("").to_string();
+        rec.drawn_by = self.get_str("DRAWN").unwrap_or("").to_string();
+        rec.date = self.get_str("DATE").unwrap_or("").to_string();
+        rec.approved = self.get_str("APPR").unwrap_or("").to_string();
+        rec.sheet_of = self.get_int("SHEETS").unwrap_or(0);
+        Ok(rec)
+    }
+
     // ── component ────────────────────────────────────────────────────────
 
     pub fn encode_component(rec: &ElComponentRec) -> ElRecord {

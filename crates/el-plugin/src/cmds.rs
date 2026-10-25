@@ -26,6 +26,7 @@ pub mod signal;
 pub mod strip;
 pub mod symbol_cmd;
 pub mod terminal;
+pub mod titleblock;
 pub mod wire;
 pub mod wiregap;
 pub mod wireno;

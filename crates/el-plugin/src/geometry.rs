@@ -1173,3 +1173,105 @@ pub fn plc_entities(record: &ElRecord, rec: &el_core::model::PlcRec) -> Vec<Enti
     }
     parts
 }
+
+// ── title block ──────────────────────────────────────────────────────────
+
+/// Build the drawing frame and title table. The frame wraps `extent` with a
+/// margin; the table sits inside the bottom-right corner, every field read
+/// live from the settings at render time (the block never stores them).
+pub fn titleblock_entities(
+    record: &ElRecord,
+    rec: &el_core::model::TitleBlockRec,
+    settings: &el_core::model::ElSettingsRec,
+    extent: [f64; 4],
+    sheets: i32,
+) -> Vec<EntityType> {
+    use el_core::model::LAYER_TITLEBLOCK;
+    const MARGIN: f64 = 15.0;
+    let x0 = extent[0] - MARGIN;
+    let y0 = extent[1] - MARGIN;
+    let x1 = extent[2] + MARGIN;
+    let y1 = extent[3] + MARGIN;
+
+    let mut parts: Vec<EntityType> = Vec::new();
+    let frame = LwPolyline::from_points(vec![
+        Vector2::new(x0, y0),
+        Vector2::new(x1, y0),
+        Vector2::new(x1, y1),
+        Vector2::new(x0, y1),
+    ]);
+    let mut frame = frame;
+    frame.is_closed = true;
+    frame.common.layer = LAYER_TITLEBLOCK.to_string();
+    attach(record, &mut frame.common);
+    parts.push(EntityType::LwPolyline(frame));
+
+    // The title table: W x H at the frame's bottom-right, rows of 6mm.
+    const W: f64 = 70.0;
+    const ROW: f64 = 6.0;
+    let tx = x1 - W;
+    let ty = y0;
+    fn dash(s: &str) -> &str {
+        if s.is_empty() { "—" } else { s }
+    }
+    let rows: Vec<(&str, String)> = vec![
+        ("TITLE", dash(&rec.title).to_string()),
+        ("DWG", dash(&settings.drawing).to_string()),
+        (
+            "SHEET",
+            format!("{} OF {sheets}", dash(&settings.sheet)),
+        ),
+        ("REV", settings.revision.to_string()),
+        (
+            "INST/LOC",
+            format!(
+                "{}/{}",
+                dash(&settings.installation),
+                dash(&settings.location)
+            ),
+        ),
+        (
+            "DRAWN",
+            format!("{} {}", dash(&rec.drawn_by), dash(&rec.date)),
+        ),
+        ("APPR", dash(&rec.approved).to_string()),
+    ];
+    let th = ROW * rows.len() as f64;
+    let table = LwPolyline::from_points(vec![
+        Vector2::new(tx, ty),
+        Vector2::new(tx + W, ty),
+        Vector2::new(tx + W, ty + th),
+        Vector2::new(tx, ty + th),
+    ]);
+    let mut table = table;
+    table.is_closed = true;
+    table.common.layer = LAYER_TITLEBLOCK.to_string();
+    attach(record, &mut table.common);
+    parts.push(EntityType::LwPolyline(table));
+
+    for (i, (name, value)) in rows.iter().enumerate() {
+        let y = ty + ROW * i as f64;
+        // Row separator.
+        if i > 0 {
+            let mut sep = LwPolyline::from_points(vec![
+                Vector2::new(tx, y),
+                Vector2::new(tx + W, y),
+            ]);
+            sep.common.layer = LAYER_TITLEBLOCK.to_string();
+            attach(record, &mut sep.common);
+            parts.push(EntityType::LwPolyline(sep));
+        }
+        // Field name, left; value, right.
+        let mut n = label(name, [tx + 1.5, y + 1.2, 0.0], 1.8, LAYER_TITLEBLOCK);
+        n.attachment_point = AttachmentPoint::BottomLeft;
+        let mut e = EntityType::MText(Box::new(n));
+        attach(record, e.common_mut());
+        parts.push(e);
+        let mut v = label(value, [tx + W - 1.5, y + 1.2, 0.0], 1.8, LAYER_TITLEBLOCK);
+        v.attachment_point = AttachmentPoint::BottomRight;
+        let mut e = EntityType::MText(Box::new(v));
+        attach(record, e.common_mut());
+        parts.push(e);
+    }
+    parts
+}
