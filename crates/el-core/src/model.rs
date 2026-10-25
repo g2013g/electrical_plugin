@@ -1170,7 +1170,7 @@ pub fn color_to_aci(color: &str) -> Option<u8> {
 
 /// The ref-des family codes a device symbol may carry, per IEC 60617. Used to
 /// seed the family of a newly placed component.
-pub const IEC_FAMILIES: [(&str, &str); 12] = [
+pub const IEC_FAMILIES: [(&str, &str); 13] = [
     ("K", "relay / contactor"),
     ("Q", "circuit breaker / switch"),
     ("F", "protective device (fuse, overload)"),
@@ -1183,6 +1183,7 @@ pub const IEC_FAMILIES: [(&str, &str); 12] = [
     ("R", "resistor"),
     ("C", "capacitor"),
     ("B", "sensor / transducer"),
+    ("V", "semiconductor / diode"),
 ];
 
 // ── wire record ──────────────────────────────────────────────────────────

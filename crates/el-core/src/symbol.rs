@@ -396,6 +396,42 @@ impl LibraryBuilder {
         self
     }
 
+
+    /// A symbol with an explicit pin list — for anything that is neither a
+    /// two-terminal rung device nor a vertical coil: changeover contacts,
+    /// multi-pole breakers, transformers, potentiometers.
+    #[allow(clippy::too_many_arguments)]
+    fn custom(
+        mut self,
+        name: &str,
+        family: &str,
+        description: &str,
+        is_child: bool,
+        contact: ContactState,
+        pins: &[(&str, [f64; 2])],
+        glyph: Vec<GlyphPrim>,
+        tag_offset: [f64; 2],
+    ) -> Self {
+        self.lib.symbols.push(SymbolDef {
+            name: name.to_string(),
+            family: family.to_string(),
+            description: description.to_string(),
+            is_child,
+            contact,
+            pins: pins
+                .iter()
+                .map(|(n, at)| PinDef {
+                    name: n.to_string(),
+                    at: *at,
+                })
+                .collect(),
+            glyph,
+            default_ratings: Vec::new(),
+            tag_offset,
+        });
+        self
+    }
+
     fn build(self) -> SymbolLibrary {
         self.lib
     }
@@ -873,6 +909,814 @@ impl LibraryBuilder {
             tag_offset: [-2.0, 6.5],
         });
 
+        // ══ Expanded set (ACADE icon-menu coverage) ══════════════════════
+        // Every family in IEC_FAMILIES now has a parent; the variants a
+        // control schematic reaches for (timers, delayed contacts, multi-pole
+        // breakers, three-phase machines, transformers, sensors) no longer
+        // fall back to "not a symbol or family".
+
+        // ── K: timer coils and delayed contacts ─────────────────────────
+        b = b.vertical(
+            "timer-coil-on",
+            "K",
+            "Timer coil, on-delay",
+            vec![
+                GlyphPrim::Polyline {
+                    points: vec![[-2.5, -4.0], [2.5, -4.0], [2.5, 4.0], [-2.5, 4.0]],
+                    closed: true,
+                },
+                GlyphPrim::Line { a: [0.0, 4.0], b: [0.0, 5.0] },
+                GlyphPrim::Line { a: [0.0, -4.0], b: [0.0, -5.0] },
+                GlyphPrim::Line { a: [-2.5, 4.0], b: [2.5, 4.0] },
+                // On-delay: the cap's left end hooks up.
+                GlyphPrim::Line { a: [-2.5, 4.0], b: [-2.5, 5.0] },
+            ],
+            &["24VDC"],
+        );
+        b = b.vertical(
+            "timer-coil-off",
+            "K",
+            "Timer coil, off-delay",
+            vec![
+                GlyphPrim::Polyline {
+                    points: vec![[-2.5, -4.0], [2.5, -4.0], [2.5, 4.0], [-2.5, 4.0]],
+                    closed: true,
+                },
+                GlyphPrim::Line { a: [0.0, 4.0], b: [0.0, 5.0] },
+                GlyphPrim::Line { a: [0.0, -4.0], b: [0.0, -5.0] },
+                GlyphPrim::Line { a: [-2.5, 4.0], b: [2.5, 4.0] },
+                // Off-delay: the cap's right end hooks up.
+                GlyphPrim::Line { a: [2.5, 4.0], b: [2.5, 5.0] },
+            ],
+            &["24VDC"],
+        );
+        b = b.horizontal(
+            "contact-no-delayed",
+            "K",
+            "Normally-open contact, time-delayed",
+            true,
+            ContactState::Open,
+            vec![
+                GlyphPrim::Line { a: [-5.0, 0.0], b: [-2.0, 0.0] },
+                GlyphPrim::Line { a: [2.0, 0.0], b: [5.0, 0.0] },
+                GlyphPrim::Line { a: [-2.0, 0.0], b: [2.6, 3.2] },
+                // The delay umbrella on the fixed contact.
+                GlyphPrim::Polyline {
+                    points: vec![[2.0, 1.6], [2.0, 4.2], [4.4, 4.2]],
+                    closed: false,
+                },
+            ],
+        );
+        b = b.horizontal(
+            "contact-nc-delayed",
+            "K",
+            "Normally-closed contact, time-delayed",
+            true,
+            ContactState::Closed,
+            vec![
+                GlyphPrim::Line { a: [-5.0, 0.0], b: [-2.0, 0.0] },
+                GlyphPrim::Line { a: [2.0, 0.0], b: [5.0, 0.0] },
+                GlyphPrim::Line { a: [-2.0, 0.0], b: [2.0, 0.0] },
+                GlyphPrim::Line { a: [2.0, -1.6], b: [2.0, 1.6] },
+                GlyphPrim::Polyline {
+                    points: vec![[3.2, -1.6], [3.2, -4.2], [5.6, -4.2]],
+                    closed: false,
+                },
+            ],
+        );
+        b = b.custom(
+            "contact-changeover",
+            "K",
+            "Changeover contact (CO)",
+            true,
+            ContactState::None,
+            &[
+                ("1", [-5.0, 0.0]),
+                ("2", [5.0, 2.5]),
+                ("3", [5.0, -2.5]),
+            ],
+            vec![
+                GlyphPrim::Line { a: [-5.0, 0.0], b: [-2.0, 0.0] },
+                GlyphPrim::Line { a: [2.0, 2.5], b: [5.0, 2.5] },
+                GlyphPrim::Line { a: [2.0, -2.5], b: [5.0, -2.5] },
+                // The blade rests on NC (top) and breaks toward NO.
+                GlyphPrim::Line { a: [-2.0, 0.0], b: [2.4, 2.5] },
+                GlyphPrim::Line { a: [-2.0, 0.0], b: [2.4, -2.0] },
+            ],
+            [-2.0, 6.0],
+        );
+
+        // ── Q: multi-pole breakers ──────────────────────────────────────
+        b = b.custom(
+            "breaker-2p",
+            "Q",
+            "Circuit breaker, 2-pole",
+            false,
+            ContactState::None,
+            &[
+                ("L1", [-2.5, 5.0]),
+                ("T1", [-2.5, -5.0]),
+                ("L2", [2.5, 5.0]),
+                ("T2", [2.5, -5.0]),
+            ],
+            vec![
+                GlyphPrim::Line { a: [-2.5, 5.0], b: [-2.5, 1.6] },
+                GlyphPrim::Line { a: [-2.5, 1.6], b: [-1.0, -1.8] },
+                GlyphPrim::Line { a: [-2.5, -3.4], b: [-2.5, -5.0] },
+                GlyphPrim::Line { a: [2.5, 5.0], b: [2.5, 1.6] },
+                GlyphPrim::Line { a: [2.5, 1.6], b: [1.0, -1.8] },
+                GlyphPrim::Line { a: [2.5, -3.4], b: [2.5, -5.0] },
+                // The trip cross links both poles.
+                GlyphPrim::Line { a: [-2.5, -1.8], b: [2.5, -1.8] },
+                GlyphPrim::Line { a: [0.0, -1.8], b: [0.0, -3.6] },
+            ],
+            [-4.0, 6.0],
+        );
+        b = b.custom(
+            "breaker-3p",
+            "Q",
+            "Circuit breaker, 3-pole",
+            false,
+            ContactState::None,
+            &[
+                ("L1", [-4.0, 5.0]),
+                ("T1", [-4.0, -5.0]),
+                ("L2", [0.0, 5.0]),
+                ("T2", [0.0, -5.0]),
+                ("L3", [4.0, 5.0]),
+                ("T3", [4.0, -5.0]),
+            ],
+            vec![
+                GlyphPrim::Line { a: [-4.0, 5.0], b: [-4.0, 1.6] },
+                GlyphPrim::Line { a: [-4.0, 1.6], b: [-2.5, -1.8] },
+                GlyphPrim::Line { a: [-4.0, -3.4], b: [-4.0, -5.0] },
+                GlyphPrim::Line { a: [0.0, 5.0], b: [0.0, 1.6] },
+                GlyphPrim::Line { a: [0.0, 1.6], b: [1.5, -1.8] },
+                GlyphPrim::Line { a: [0.0, -3.4], b: [0.0, -5.0] },
+                GlyphPrim::Line { a: [4.0, 5.0], b: [4.0, 1.6] },
+                GlyphPrim::Line { a: [4.0, 1.6], b: [2.5, -1.8] },
+                GlyphPrim::Line { a: [4.0, -3.4], b: [4.0, -5.0] },
+                GlyphPrim::Line { a: [-4.0, -1.8], b: [4.0, -1.8] },
+                GlyphPrim::Line { a: [0.0, -1.8], b: [0.0, -3.6] },
+            ],
+            [-5.5, 6.0],
+        );
+
+        // ── F: combined protection ──────────────────────────────────────
+        b = b.horizontal(
+            "fuse-breaker",
+            "F",
+            "Fuse/circuit-breaker (combined)",
+            false,
+            ContactState::None,
+            vec![
+                GlyphPrim::Line { a: [-5.0, 0.0], b: [-3.2, 0.0] },
+                GlyphPrim::Line { a: [3.2, 0.0], b: [5.0, 0.0] },
+                // The fuse rectangle straddling the rung.
+                GlyphPrim::Polyline {
+                    points: vec![[-3.2, -1.8], [3.2, -1.8], [3.2, 1.8], [-3.2, 1.8]],
+                    closed: true,
+                },
+                // The breaker blade crossing it.
+                GlyphPrim::Line { a: [-3.2, 0.0], b: [4.0, 3.4] },
+            ],
+        );
+
+        // ── M: more machines ────────────────────────────────────────────
+        b = b.vertical(
+            "motor-3",
+            "M",
+            "Three-phase motor",
+            vec![
+                GlyphPrim::Circle { center: [0.0, 0.0], radius: 3.8 },
+                GlyphPrim::Text { at: [0.0, -0.2], height: 2.6, text: "M".to_string() },
+                GlyphPrim::Text { at: [0.0, -2.6], height: 1.8, text: "3~".to_string() },
+                GlyphPrim::Line { a: [0.0, 3.8], b: [0.0, 5.0] },
+                GlyphPrim::Line { a: [0.0, -3.8], b: [0.0, -5.0] },
+            ],
+            &["400VAC"],
+        );
+        b = b.vertical(
+            "motor-dc",
+            "M",
+            "DC motor",
+            vec![
+                GlyphPrim::Circle { center: [0.0, 0.0], radius: 3.8 },
+                GlyphPrim::Text { at: [0.0, -0.2], height: 2.6, text: "M".to_string() },
+                GlyphPrim::Text { at: [0.0, -2.6], height: 1.8, text: "=".to_string() },
+                GlyphPrim::Line { a: [0.0, 3.8], b: [0.0, 5.0] },
+                GlyphPrim::Line { a: [0.0, -3.8], b: [0.0, -5.0] },
+            ],
+            &["24VDC"],
+        );
+
+        // ── G: more supplies ────────────────────────────────────────────
+        b = b.vertical(
+            "supply-ac",
+            "G",
+            "AC supply",
+            vec![
+                GlyphPrim::Polyline {
+                    points: vec![[-5.0, -3.0], [5.0, -3.0], [5.0, 3.0], [-5.0, 3.0]],
+                    closed: true,
+                },
+                // The sine, as the standard draws it.
+                GlyphPrim::Polyline {
+                    points: vec![
+                        [-3.0, 0.0],
+                        [-2.2, 1.6],
+                        [-1.0, 1.6],
+                        [-0.2, 0.0],
+                        [0.6, -1.6],
+                        [1.8, -1.6],
+                        [2.6, 0.0],
+                        [3.4, 1.2],
+                    ],
+                    closed: false,
+                },
+            ],
+            &["230VAC"],
+        );
+        b = b.custom(
+            "battery",
+            "G",
+            "Battery",
+            false,
+            ContactState::None,
+            &[("+", [0.0, 5.0]), ("-", [0.0, -5.0])],
+            vec![
+                GlyphPrim::Line { a: [0.0, 5.0], b: [0.0, 1.2] },
+                GlyphPrim::Line { a: [-3.0, 1.2], b: [3.0, 1.2] },
+                GlyphPrim::Line { a: [-1.2, -0.4], b: [1.2, -0.4] },
+                GlyphPrim::Line { a: [-3.0, -1.6], b: [3.0, -1.6] },
+                GlyphPrim::Line { a: [-1.2, -3.2], b: [1.2, -3.2] },
+                GlyphPrim::Line { a: [0.0, -5.0], b: [0.0, -3.2] },
+                GlyphPrim::Text { at: [4.2, 1.2], height: 2.0, text: "+".to_string() },
+            ],
+            [-4.0, 5.0],
+        );
+        b = b.vertical(
+            "generator",
+            "G",
+            "Generator",
+            vec![
+                GlyphPrim::Circle { center: [0.0, 0.0], radius: 3.8 },
+                GlyphPrim::Text { at: [0.0, -0.4], height: 2.6, text: "G".to_string() },
+                GlyphPrim::Line { a: [0.0, 3.8], b: [0.0, 5.0] },
+                GlyphPrim::Line { a: [0.0, -3.8], b: [0.0, -5.0] },
+            ],
+            &["400VAC"],
+        );
+
+        // ── T: transformers (new family) ────────────────────────────────
+        b = b.custom(
+            "transformer-2w",
+            "T",
+            "Transformer, two-winding",
+            false,
+            ContactState::None,
+            &[
+                ("P1", [-5.0, 2.5]),
+                ("P2", [-5.0, -2.5]),
+                ("S1", [5.0, 2.5]),
+                ("S2", [5.0, -2.5]),
+            ],
+            vec![
+                // Two C-shaped windings facing each other over the core.
+                GlyphPrim::Polyline {
+                    points: vec![
+                        [-2.0, 4.5],
+                        [-2.0, -4.5],
+                        [0.6, -4.5],
+                        [0.6, -3.4],
+                        [-1.0, -3.4],
+                        [-1.0, 3.4],
+                        [0.6, 3.4],
+                        [0.6, 4.5],
+                    ],
+                    closed: false,
+                },
+                GlyphPrim::Polyline {
+                    points: vec![
+                        [2.0, 4.5],
+                        [2.0, -4.5],
+                        [-0.6, -4.5],
+                        [-0.6, -3.4],
+                        [1.0, -3.4],
+                        [1.0, 3.4],
+                        [-0.6, 3.4],
+                        [-0.6, 4.5],
+                    ],
+                    closed: false,
+                },
+                GlyphPrim::Line { a: [-5.0, 2.5], b: [-2.0, 2.5] },
+                GlyphPrim::Line { a: [-5.0, -2.5], b: [-2.0, -2.5] },
+                GlyphPrim::Line { a: [5.0, 2.5], b: [2.0, 2.5] },
+                GlyphPrim::Line { a: [5.0, -2.5], b: [2.0, -2.5] },
+                // The core between the windings.
+                GlyphPrim::Line { a: [0.0, 4.5], b: [0.0, -4.5] },
+            ],
+            [-6.0, 6.0],
+        );
+        b = b.custom(
+            "transformer-3w",
+            "T",
+            "Transformer, three-winding",
+            false,
+            ContactState::None,
+            &[
+                ("P1", [-5.0, 2.5]),
+                ("P2", [-5.0, -2.5]),
+                ("S1", [5.0, 3.6]),
+                ("S2", [5.0, 0.0]),
+                ("S3", [5.0, -3.6]),
+            ],
+            vec![
+                GlyphPrim::Polyline {
+                    points: vec![
+                        [-2.0, 4.5],
+                        [-2.0, -4.5],
+                        [0.6, -4.5],
+                        [0.6, -3.4],
+                        [-1.0, -3.4],
+                        [-1.0, 3.4],
+                        [0.6, 3.4],
+                        [0.6, 4.5],
+                    ],
+                    closed: false,
+                },
+                GlyphPrim::Polyline {
+                    points: vec![
+                        [2.0, 5.2],
+                        [2.0, -5.2],
+                        [-0.6, -5.2],
+                        [-0.6, -4.2],
+                        [1.0, -4.2],
+                        [1.0, 4.2],
+                        [-0.6, 4.2],
+                        [-0.6, 5.2],
+                    ],
+                    closed: false,
+                },
+                GlyphPrim::Line { a: [-5.0, 2.5], b: [-2.0, 2.5] },
+                GlyphPrim::Line { a: [-5.0, -2.5], b: [-2.0, -2.5] },
+                GlyphPrim::Line { a: [5.0, 3.6], b: [2.0, 3.6] },
+                GlyphPrim::Line { a: [5.0, 0.0], b: [2.0, 0.0] },
+                GlyphPrim::Line { a: [5.0, -3.6], b: [2.0, -3.6] },
+                GlyphPrim::Line { a: [0.0, 5.2], b: [0.0, -5.2] },
+            ],
+            [-6.0, 6.5],
+        );
+        b = b.custom(
+            "current-transformer",
+            "T",
+            "Current transformer",
+            false,
+            ContactState::None,
+            &[
+                ("I1", [-5.0, 0.0]),
+                ("I2", [5.0, 0.0]),
+                ("S1", [0.0, 5.0]),
+                ("S2", [0.0, -5.0]),
+            ],
+            vec![
+                // The primary bar runs straight through.
+                GlyphPrim::Line { a: [-5.0, 0.0], b: [5.0, 0.0] },
+                // The secondary winding wraps it: three turns suggested.
+                GlyphPrim::Polyline {
+                    points: vec![[-2.6, 1.6], [-1.2, 1.6], [-1.2, -1.6], [-2.6, -1.6], [-2.6, 1.6]],
+                    closed: true,
+                },
+                GlyphPrim::Polyline {
+                    points: vec![[-0.6, 1.6], [0.8, 1.6], [0.8, -1.6], [-0.6, -1.6], [-0.6, 1.6]],
+                    closed: true,
+                },
+                GlyphPrim::Polyline {
+                    points: vec![[1.4, 1.6], [2.8, 1.6], [2.8, -1.6], [1.4, -1.6], [1.4, 1.6]],
+                    closed: true,
+                },
+                GlyphPrim::Line { a: [0.0, 1.6], b: [0.0, 5.0] },
+                GlyphPrim::Line { a: [2.8, 0.8], b: [2.8, 0.0] },
+                GlyphPrim::Line { a: [2.8, -0.8], b: [2.8, 0.0] },
+                GlyphPrim::Line { a: [2.8, 0.0], b: [4.2, 0.0] },
+                GlyphPrim::Line { a: [2.8, 0.0], b: [2.8, -5.0] },
+            ],
+            [-4.0, 5.5],
+        );
+
+        // ── S: more switches ────────────────────────────────────────────
+        b = b.horizontal(
+            "selector-2pos",
+            "S",
+            "Selector switch, two-position",
+            false,
+            ContactState::Open,
+            vec![
+                GlyphPrim::Line { a: [-5.0, 0.0], b: [-2.0, 0.0] },
+                GlyphPrim::Line { a: [2.0, 0.0], b: [5.0, 0.0] },
+                GlyphPrim::Line { a: [-2.0, 0.0], b: [2.6, 3.2] },
+                // The selector arrowhead replaces the plain blade tip.
+                GlyphPrim::Polyline {
+                    points: vec![[1.6, 2.1], [2.6, 3.2], [1.2, 3.4]],
+                    closed: true,
+                },
+            ],
+        );
+        b = b.custom(
+            "selector-3pos",
+            "S",
+            "Selector switch, three-position",
+            false,
+            ContactState::None,
+            &[
+                ("1", [-5.0, 0.0]),
+                ("2", [5.0, 2.5]),
+                ("3", [5.0, -2.5]),
+                ("4", [-5.0, -5.0]),
+            ],
+            vec![
+                GlyphPrim::Line { a: [-5.0, 0.0], b: [-2.0, 0.0] },
+                GlyphPrim::Line { a: [2.0, 2.5], b: [5.0, 2.5] },
+                GlyphPrim::Line { a: [2.0, -2.5], b: [5.0, -2.5] },
+                GlyphPrim::Line { a: [-5.0, -5.0], b: [-2.0, -5.0] },
+                GlyphPrim::Line { a: [-2.0, 0.0], b: [2.4, 2.5] },
+                GlyphPrim::Polyline {
+                    points: vec![[1.4, 1.4], [2.4, 2.5], [1.0, 2.7]],
+                    closed: true,
+                },
+                GlyphPrim::Line { a: [-2.0, -0.4], b: [-2.0, -4.6] },
+            ],
+            [-2.0, 6.5],
+        );
+        b = b.horizontal(
+            "limit-no",
+            "S",
+            "Limit switch, normally open",
+            false,
+            ContactState::Open,
+            vec![
+                GlyphPrim::Line { a: [-5.0, 0.0], b: [-2.0, 0.0] },
+                GlyphPrim::Line { a: [2.0, 0.0], b: [5.0, 0.0] },
+                GlyphPrim::Line { a: [-2.0, 0.0], b: [2.6, 3.2] },
+                // The roller arm.
+                GlyphPrim::Line { a: [2.6, 3.2], b: [3.8, 4.6] },
+                GlyphPrim::Circle { center: [4.3, 5.1], radius: 0.9 },
+            ],
+        );
+        b = b.horizontal(
+            "limit-nc",
+            "S",
+            "Limit switch, normally closed",
+            false,
+            ContactState::Closed,
+            vec![
+                GlyphPrim::Line { a: [-5.0, 0.0], b: [-2.0, 0.0] },
+                GlyphPrim::Line { a: [2.0, 0.0], b: [5.0, 0.0] },
+                GlyphPrim::Line { a: [-2.0, 0.0], b: [2.0, 0.0] },
+                GlyphPrim::Line { a: [2.0, -1.6], b: [2.0, 1.6] },
+                GlyphPrim::Line { a: [2.0, 0.6], b: [3.8, 4.4] },
+                GlyphPrim::Circle { center: [4.3, 5.1], radius: 0.9 },
+            ],
+        );
+        b = b.horizontal(
+            "e-stop",
+            "S",
+            "Emergency stop (mushroom head)",
+            false,
+            ContactState::Closed,
+            vec![
+                GlyphPrim::Line { a: [-5.0, 0.0], b: [-2.0, 0.0] },
+                GlyphPrim::Line { a: [2.0, 0.0], b: [5.0, 0.0] },
+                GlyphPrim::Line { a: [-2.0, 0.0], b: [2.0, 0.0] },
+                GlyphPrim::Line { a: [2.0, -1.6], b: [2.0, 1.6] },
+                GlyphPrim::Line { a: [0.0, 0.8], b: [0.0, 4.2] },
+                // The mushroom: a wide flat head.
+                GlyphPrim::Line { a: [-3.2, 5.2], b: [3.2, 5.2] },
+                GlyphPrim::Line { a: [-3.2, 5.2], b: [-3.2, 4.2] },
+                GlyphPrim::Line { a: [3.2, 5.2], b: [3.2, 4.2] },
+                GlyphPrim::Line { a: [-3.2, 4.2], b: [3.2, 4.2] },
+                // The reset arrows.
+                GlyphPrim::Line { a: [-1.0, 6.0], b: [0.0, 5.4] },
+                GlyphPrim::Line { a: [1.0, 6.0], b: [0.0, 5.4] },
+            ],
+        );
+        b = b.custom(
+            "float-switch",
+            "S",
+            "Float switch",
+            false,
+            ContactState::Open,
+            &[
+                ("1", [-5.0, 0.0]),
+                ("2", [5.0, 0.0]),
+            ],
+            vec![
+                GlyphPrim::Line { a: [-5.0, 0.0], b: [-2.0, 0.0] },
+                GlyphPrim::Line { a: [2.0, 0.0], b: [5.0, 0.0] },
+                GlyphPrim::Line { a: [-2.0, 0.0], b: [2.6, 3.0] },
+                // The measured quantity, boxed: the standard marks the
+                // operating medium beside the blade.
+                GlyphPrim::Polyline {
+                    points: vec![[1.2, 4.0], [4.6, 4.0], [4.6, 7.0], [1.2, 7.0]],
+                    closed: true,
+                },
+                GlyphPrim::Text { at: [2.9, 4.9], height: 1.9, text: "FL".to_string() },
+            ],
+            [-2.0, 8.5],
+        );
+        b = b.custom(
+            "pressure-switch",
+            "S",
+            "Pressure switch",
+            false,
+            ContactState::Open,
+            &[
+                ("1", [-5.0, 0.0]),
+                ("2", [5.0, 0.0]),
+            ],
+            vec![
+                GlyphPrim::Line { a: [-5.0, 0.0], b: [-2.0, 0.0] },
+                GlyphPrim::Line { a: [2.0, 0.0], b: [5.0, 0.0] },
+                GlyphPrim::Line { a: [-2.0, 0.0], b: [2.6, 3.0] },
+                GlyphPrim::Polyline {
+                    points: vec![[1.2, 4.0], [4.6, 4.0], [4.6, 7.0], [1.2, 7.0]],
+                    closed: true,
+                },
+                GlyphPrim::Text { at: [2.9, 4.9], height: 1.9, text: "P".to_string() },
+            ],
+            [-2.0, 8.5],
+        );
+        b = b.custom(
+            "temperature-switch",
+            "S",
+            "Temperature switch",
+            false,
+            ContactState::Open,
+            &[
+                ("1", [-5.0, 0.0]),
+                ("2", [5.0, 0.0]),
+            ],
+            vec![
+                GlyphPrim::Line { a: [-5.0, 0.0], b: [-2.0, 0.0] },
+                GlyphPrim::Line { a: [2.0, 0.0], b: [5.0, 0.0] },
+                GlyphPrim::Line { a: [-2.0, 0.0], b: [2.6, 3.0] },
+                GlyphPrim::Polyline {
+                    points: vec![[1.2, 4.0], [4.6, 4.0], [4.6, 7.0], [1.2, 7.0]],
+                    closed: true,
+                },
+                GlyphPrim::Text { at: [2.9, 4.9], height: 1.9, text: "T".to_string() },
+            ],
+            [-2.0, 8.5],
+        );
+
+        // ── H: audible signals ──────────────────────────────────────────
+        b = b.vertical(
+            "buzzer",
+            "H",
+            "Buzzer",
+            vec![
+                GlyphPrim::Polyline {
+                    points: vec![[-3.4, 0.6], [-3.4, 3.2], [3.4, 3.2], [3.4, 0.6]],
+                    closed: false,
+                },
+                // The semicircle dome.
+                GlyphPrim::Polyline {
+                    points: vec![
+                        [-3.4, 0.6],
+                        [-2.6, 2.2],
+                        [-1.3, 3.1],
+                        [0.0, 3.4],
+                        [1.3, 3.1],
+                        [2.6, 2.2],
+                        [3.4, 0.6],
+                    ],
+                    closed: false,
+                },
+                GlyphPrim::Line { a: [0.0, 0.6], b: [0.0, -5.0] },
+            ],
+            &["24VDC"],
+        );
+        b = b.horizontal(
+            "horn",
+            "H",
+            "Horn / sounder",
+            false,
+            ContactState::None,
+            vec![
+                GlyphPrim::Line { a: [-5.0, 0.0], b: [-2.6, 0.0] },
+                GlyphPrim::Line { a: [3.6, 0.0], b: [5.0, 0.0] },
+                // The horn bell, opening outward.
+                GlyphPrim::Polyline {
+                    points: vec![[-2.6, -1.4], [-2.6, 1.4], [3.6, 2.8], [3.6, -2.8]],
+                    closed: true,
+                },
+            ],
+        );
+
+        // ── R: variable resistors ───────────────────────────────────────
+        b = b.horizontal(
+            "resistor-variable",
+            "R",
+            "Variable resistor",
+            false,
+            ContactState::None,
+            vec![
+                GlyphPrim::Polyline {
+                    points: vec![[-3.0, -1.6], [3.0, -1.6], [3.0, 1.6], [-3.0, 1.6]],
+                    closed: true,
+                },
+                GlyphPrim::Line { a: [-5.0, 0.0], b: [-3.0, 0.0] },
+                GlyphPrim::Line { a: [3.0, 0.0], b: [5.0, 0.0] },
+                // The adjustment arrow through the body.
+                GlyphPrim::Line { a: [-4.2, 4.0], b: [3.6, -2.6] },
+                GlyphPrim::Polyline {
+                    points: vec![[3.6, -2.6], [2.2, -2.4], [3.2, -1.0]],
+                    closed: true,
+                },
+            ],
+        );
+        b = b.custom(
+            "potentiometer",
+            "R",
+            "Potentiometer",
+            false,
+            ContactState::None,
+            &[
+                ("1", [-5.0, 0.0]),
+                ("2", [5.0, 0.0]),
+                ("3", [0.0, 5.0]),
+            ],
+            vec![
+                GlyphPrim::Polyline {
+                    points: vec![[-3.0, -1.6], [3.0, -1.6], [3.0, 1.6], [-3.0, 1.6]],
+                    closed: true,
+                },
+                GlyphPrim::Line { a: [-5.0, 0.0], b: [-3.0, 0.0] },
+                GlyphPrim::Line { a: [3.0, 0.0], b: [5.0, 0.0] },
+                GlyphPrim::Line { a: [0.0, 5.0], b: [0.0, 1.2] },
+                GlyphPrim::Line { a: [-1.0, 1.2], b: [1.0, 1.2] },
+                GlyphPrim::Line { a: [-4.2, 4.0], b: [3.6, -2.4] },
+                GlyphPrim::Polyline {
+                    points: vec![[3.6, -2.4], [2.2, -2.2], [3.2, -0.8]],
+                    closed: true,
+                },
+            ],
+            [-2.0, 6.5],
+        );
+
+        // ── C: polarized capacitor ──────────────────────────────────────
+        b = b.horizontal(
+            "capacitor-polarized",
+            "C",
+            "Capacitor, polarized",
+            false,
+            ContactState::None,
+            vec![
+                GlyphPrim::Line { a: [-5.0, 0.0], b: [-1.4, 0.0] },
+                GlyphPrim::Line { a: [-1.4, -2.6], b: [-1.4, 2.6] },
+                // The curved (negative) plate.
+                GlyphPrim::Polyline {
+                    points: vec![[1.6, -2.6], [0.6, -1.2], [0.6, 1.2], [1.6, 2.6]],
+                    closed: false,
+                },
+                GlyphPrim::Line { a: [1.6, 0.0], b: [5.0, 0.0] },
+                GlyphPrim::Text { at: [-3.0, 3.2], height: 1.8, text: "+".to_string() },
+            ],
+        );
+
+        // ── B: sensors (new family) ─────────────────────────────────────
+        b = b.horizontal(
+            "proximity-switch",
+            "B",
+            "Proximity switch",
+            false,
+            ContactState::Open,
+            vec![
+                GlyphPrim::Line { a: [-5.0, 0.0], b: [-2.0, 0.0] },
+                GlyphPrim::Line { a: [2.0, 0.0], b: [5.0, 0.0] },
+                GlyphPrim::Line { a: [-2.0, 0.0], b: [2.6, 3.2] },
+                // The sensing head: a box with the field fence.
+                GlyphPrim::Polyline {
+                    points: vec![[2.6, 3.2], [4.8, 3.2], [4.8, 6.4], [2.6, 6.4]],
+                    closed: true,
+                },
+                GlyphPrim::Line { a: [4.8, 4.0], b: [5.8, 4.0] },
+                GlyphPrim::Line { a: [4.8, 4.8], b: [5.8, 4.8] },
+                GlyphPrim::Line { a: [4.8, 5.6], b: [5.8, 5.6] },
+            ],
+        );
+        b = b.custom(
+            "flow-switch",
+            "B",
+            "Flow switch / sensor",
+            false,
+            ContactState::Open,
+            &[
+                ("1", [-5.0, 0.0]),
+                ("2", [5.0, 0.0]),
+            ],
+            vec![
+                GlyphPrim::Line { a: [-5.0, 0.0], b: [-2.0, 0.0] },
+                GlyphPrim::Line { a: [2.0, 0.0], b: [5.0, 0.0] },
+                GlyphPrim::Line { a: [-2.0, 0.0], b: [2.6, 3.0] },
+                GlyphPrim::Polyline {
+                    points: vec![[1.2, 4.0], [4.6, 4.0], [4.6, 7.0], [1.2, 7.0]],
+                    closed: true,
+                },
+                GlyphPrim::Text { at: [2.9, 4.9], height: 1.9, text: "F".to_string() },
+            ],
+            [-2.0, 8.5],
+        );
+        b = b.custom(
+            "level-switch",
+            "B",
+            "Level switch / sensor",
+            false,
+            ContactState::Open,
+            &[
+                ("1", [-5.0, 0.0]),
+                ("2", [5.0, 0.0]),
+            ],
+            vec![
+                GlyphPrim::Line { a: [-5.0, 0.0], b: [-2.0, 0.0] },
+                GlyphPrim::Line { a: [2.0, 0.0], b: [5.0, 0.0] },
+                GlyphPrim::Line { a: [-2.0, 0.0], b: [2.6, 3.0] },
+                GlyphPrim::Polyline {
+                    points: vec![[1.2, 4.0], [4.6, 4.0], [4.6, 7.0], [1.2, 7.0]],
+                    closed: true,
+                },
+                GlyphPrim::Text { at: [2.9, 4.9], height: 1.9, text: "L".to_string() },
+            ],
+            [-2.0, 8.5],
+        );
+        b = b.custom(
+            "photoelectric-sensor",
+            "B",
+            "Photoelectric sensor",
+            false,
+            ContactState::Open,
+            &[
+                ("1", [-5.0, 0.0]),
+                ("2", [5.0, 0.0]),
+            ],
+            vec![
+                GlyphPrim::Line { a: [-5.0, 0.0], b: [-2.0, 0.0] },
+                GlyphPrim::Line { a: [2.0, 0.0], b: [5.0, 0.0] },
+                GlyphPrim::Line { a: [-2.0, 0.0], b: [2.6, 3.0] },
+                GlyphPrim::Polyline {
+                    points: vec![[1.2, 4.0], [4.6, 4.0], [4.6, 7.0], [1.2, 7.0]],
+                    closed: true,
+                },
+                GlyphPrim::Text { at: [2.9, 4.9], height: 1.9, text: "PE".to_string() },
+            ],
+            [-2.0, 8.5],
+        );
+
+        // ── V: semiconductors (new family) ──────────────────────────────
+        b = b.horizontal(
+            "diode",
+            "V",
+            "Diode",
+            false,
+            ContactState::None,
+            vec![
+                GlyphPrim::Line { a: [-5.0, 0.0], b: [-1.8, 0.0] },
+                GlyphPrim::Polyline {
+                    points: vec![[-1.8, -2.2], [1.8, 0.0], [-1.8, 2.2]],
+                    closed: true,
+                },
+                GlyphPrim::Line { a: [1.8, -2.4], b: [1.8, 2.4] },
+                GlyphPrim::Line { a: [1.8, 0.0], b: [5.0, 0.0] },
+            ],
+        );
+        b = b.horizontal(
+            "led",
+            "V",
+            "Light-emitting diode",
+            false,
+            ContactState::None,
+            vec![
+                GlyphPrim::Line { a: [-5.0, 0.0], b: [-1.8, 0.0] },
+                GlyphPrim::Polyline {
+                    points: vec![[-1.8, -2.2], [1.8, 0.0], [-1.8, 2.2]],
+                    closed: true,
+                },
+                GlyphPrim::Line { a: [1.8, -2.4], b: [1.8, 2.4] },
+                GlyphPrim::Line { a: [1.8, 0.0], b: [5.0, 0.0] },
+                // The two emission arrows.
+                GlyphPrim::Line { a: [0.6, 2.0], b: [2.6, 4.0] },
+                GlyphPrim::Polyline {
+                    points: vec![[2.6, 4.0], [1.6, 3.6], [2.2, 3.0]],
+                    closed: true,
+                },
+                GlyphPrim::Line { a: [1.8, 1.2], b: [3.8, 3.2] },
+                GlyphPrim::Polyline {
+                    points: vec![[3.8, 3.2], [2.8, 2.8], [3.4, 2.2]],
+                    closed: true,
+                },
+            ],
+        );
+
         b
     }
 }
@@ -890,7 +1734,7 @@ mod tests {
             lib.invalid()
         );
         let families: Vec<String> = lib.families().into_iter().map(|(f, _)| f).collect();
-        for expect in ["K", "Q", "F", "M", "H", "X", "R", "C", "S", "G", "PE"] {
+        for expect in ["K", "Q", "F", "M", "H", "X", "R", "C", "S", "G", "PE", "T", "B", "V"] {
             assert!(families.contains(&expect.to_string()), "missing family {expect}");
         }
     }

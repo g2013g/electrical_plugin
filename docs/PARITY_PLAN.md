@@ -4,6 +4,28 @@
 > (API 10, host v2026.42) against AutoCAD Electrical's feature set. This file
 > is the operational task ledger; `../README.md` is the knowledge base.
 
+## Textbook reference map (Tickoo, *AutoCAD Electrical 2016*, 7th ed.)
+
+The user's reference PDF lives at the workspace root. Its chapters map onto
+this queue:
+
+| Chapter | Topic | Our state |
+|---|---|---|
+| 1 Introduction | — | n/a |
+| 2 Projects & drawings | project manager, per-drawing props | **T2** register + extracts ✓ (retag orchestration pending) |
+| 3 Wires | types, numbering, gaps/trim | wire types ✓, dual numbering ✓, **gaps + trim ✓** |
+| 4 Ladders | — | ladders + rungs ✓ |
+| 5 Schematic components | icon menu, parent/child, catalog | **expanded icon set ✓ (52 symbols)**, links/xrefs ✓, catalog ✓; multiple-insert & swap pending |
+| 6 Schematic editing | move/copy/retag/audit | move/rotate/retag ✓, audit ✓, **GUI hang fixed** |
+| 7 Connectors & circuits | parametric connectors, circuit builder | connectors ✓; **circuit builder absent (T8)** |
+| 8 Panel layouts | footprints, balloons | **absent (T4)** |
+| 9 Reports | schematic/panel reports | 9 reports ✓ (panel reports need T4) |
+| 10 PLC modules | parametric modules | **absent (T5)** |
+| 11 Terminals | strips, jumpers, TSE | **T3 complete** ✓ (multi-tier diagrams pending) |
+| 12 Settings/templates/plot | title blocks, plot | settings ✓; **title block absent (T6)** |
+| 13 Creating symbols | symbol builder | `EL_SYMBOL` capture ✓ |
+| 14 Projects | — | see CH2 |
+
 ## Where the plugin stands
 
 The core ACADE authoring loop is built and verified (Phases 0–4, 382 unit
@@ -23,6 +45,26 @@ The remaining distance to ACADE parity is, in order of user value:
 | T5 | PLC I/O: JSON module data + `EL_IO IMPORT <csv>` + parametric modules | PLC I/O Utility | deferred; needs a module data file |
 | T6 | `EL_TITLEBLOCK`: drawing frame + writing project metadata into it | Title blocks | deferred; `WH_REPORTMETA`/PDF title block is the template |
 | T7 | Symbol library depth: shipped JIC/NFPA set, per-contactor auxiliary-contact tables | ~2000-symbol libraries | partial (IEC set + capture exist) |
+
+### T7 first increment — landed 2026-10-25
+
+The built-in IEC set grew **17 → 52 symbols**, covering every `IEC_FAMILIES`
+code (T transformer and B sensor were entirely absent; V semiconductor added):
+timer coils (on/off-delay), delayed NO/NC contacts, changeover contact,
+2/3-pole breakers, fuse-breaker, 3-phase & DC motors, AC supply, battery,
+generator, 2/3-winding transformers, current transformer, 2/3-position
+selectors, limit switches, e-stop, float/pressure/temperature switches,
+buzzer, horn, variable resistor, potentiometer, polarized capacitor,
+proximity/flow/level/photoelectric sensors, diode, LED. Multi-pin symbols use
+the new `LibraryBuilder::custom()` (explicit pin lists).
+
+**Trap closed:** a bare `EL_LIB EXPORT` had snapshotted the old 17-symbol
+built-in into the per-user `el-library.json`, which then *shadowed* the
+compiled-in set — every new built-in symbol was invisible. The stale snapshot
+(verified to contain zero user symbols) was renamed aside, and bare `EL_LIB
+EXPORT` now refuses to freeze an unmodified built-in into the fallback
+library. **Rule: a file library always wins over the built-in — export
+deliberately, never bare.**
 | T8 | Circuit builder: parametric circuit templates with retag/renumber | Circuit Builder | absent |
 | T9 | Report configurability + project-wide report merge; XLS output | Report generator | 9 fixed kinds exist |
 | T10 | Catalog depth: multi-mfr per device, live parts search (reuse WH `mouser.rs`) | Catalog database | partial |

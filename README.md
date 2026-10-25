@@ -153,8 +153,20 @@ orphans. A ladder is folded the same way.
 
 ### The symbol library
 
-The library is a JSON file — read, diff and edit it. IEC 60617 shapes ship
-built-in, and JIC/NFPA is a second file rather than a second code path.
+The library is a JSON file — read, diff and edit it. **52 IEC 60617 shapes
+ship built-in** — every family code (K Q F M G T X S H R C B V PE) has a
+parent, with the common variants a control schematic reaches for (timer
+coils, delayed and changeover contacts, 2/3-pole breakers, three-phase and DC
+machines, transformers and CTs, selectors, limit and e-stop switches, float/
+pressure/temperature switches, buzzers and horns, variable resistors and
+potentiometers, polarized capacitors, proximity/flow/level/photoelectric
+sensors, diodes and LEDs) — and JIC/NFPA is a second file rather than a
+second code path.
+
+A word of caution learned the hard way: a library **file always wins over the
+built-in set**, so a bare `EL_LIB EXPORT` (which now refuses) used to freeze a
+snapshot of the built-in over future expansions. Export to a named file, or
+let `EL_SYMBOL` captures create the project library.
 
 `EL_SYMBOL` is what keeps the library open: it captures geometry you drew with
 the host's own tools as a definition, storing it relative to a base point so it

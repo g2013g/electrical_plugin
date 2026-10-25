@@ -8,7 +8,7 @@
 
 use ocs_plugin_api::host::HostApi;
 
-use el_core::symbol::{SymbolLibrary, SymbolDef};
+use el_core::symbol::{SymbolDef, SymbolLibrary};
 
 use crate::cmds::common::Args;
 use crate::library;
@@ -210,9 +210,29 @@ fn export(host: &mut dyn HostApi, a: &Args) {
         .skip(1)
         .find(|t| !t.contains(','))
         .cloned();
+    let (fallback, _scope) = library::library_target(host);
     let path = match target {
         Some(raw) => library::output(host, &raw),
-        None => library::library_target(host).0,
+        None => {
+            // Exporting the un-modified built-in to the fallback target would
+            // freeze a snapshot of it there forever — the file then shadows
+            // the compiled-in set, so every future built-in symbol would be
+            // invisible until someone deleted the file by hand.
+            let builtin = el_core::symbol::SymbolLibrary::default();
+            if !fallback.exists()
+                && lib.name == builtin.name
+                && lib.symbols.len() == builtin.symbols.len()
+            {
+                host.push_error(
+                    "EL_LIB EXPORT: the built-in set is compiled in — exporting it to the \
+                     fallback library would freeze this snapshot and shadow future built-ins. \
+                     Name a file (EL_LIB EXPORT my-library.json) to export beside the drawing, \
+                     or capture symbols with EL_SYMBOL first",
+                );
+                return;
+            }
+            fallback
+        }
     };
     match std::fs::write(&path, lib.to_json()) {
         Ok(()) => host.push_output(&format!(
