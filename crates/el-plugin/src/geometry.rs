@@ -380,6 +380,119 @@ pub const LAYER_TERMINALS: &str = el_core::model::LAYER_TERMINALS;
 /// The layer cable markers are drawn on.
 pub const LAYER_CABLES: &str = el_core::model::LAYER_CABLES;
 pub const LAYER_SIGNALS: &str = el_core::model::LAYER_SIGNALS;
+pub const LAYER_STRIPS: &str = el_core::model::LAYER_STRIPS;
+
+/// One cell of a drawn strip diagram — everything the render needs to know
+/// about one terminal, resolved by the caller from the index.
+pub struct StripCell {
+    pub number: String,
+    /// Wire numbers landing on this terminal, as they will read on the sheet.
+    pub wires: Vec<String>,
+    /// The terminal's partition group, if any.
+    pub partition: String,
+    /// Bridged to the next cell.
+    pub jumper_right: bool,
+    /// A partition boundary sits between this cell and the next.
+    pub divider_right: bool,
+}
+
+/// Build a drawn strip diagram: one box per terminal, its number inside, the
+/// wires that reach it above, its partition below — with jumper bridges
+/// arcing between bridged cells and doubled lines at partition boundaries.
+///
+/// Every drawn part carries the plot record, so the diagram is one object:
+/// re-drawing a strip replaces its plot, and `EL_DELETE` takes it whole.
+pub fn strip_plot_entities(
+    record: &ElRecord,
+    cells: &[StripCell],
+    at: [f64; 3],
+) -> Vec<EntityType> {
+    const CELL_W: f64 = 9.0;
+    const CELL_H: f64 = 8.0;
+    let mut parts: Vec<EntityType> = Vec::new();
+    let mut x = at[0];
+
+    for (i, cell) in cells.iter().enumerate() {
+        // The box.
+        let corners = vec![
+            Vector2::new(x, at[1]),
+            Vector2::new(x + CELL_W, at[1]),
+            Vector2::new(x + CELL_W, at[1] + CELL_H),
+            Vector2::new(x, at[1] + CELL_H),
+        ];
+        let mut box_pl = LwPolyline::from_points(corners);
+        box_pl.is_closed = true;
+        box_pl.elevation = at[2];
+        box_pl.common.layer = LAYER_STRIPS.to_string();
+        attach(record, &mut box_pl.common);
+        parts.push(EntityType::LwPolyline(box_pl));
+
+        // The number, centred in the box.
+        let mut num = label(&cell.number, [x + CELL_W / 2.0, at[1] + CELL_H / 2.0 - 0.9, at[2]], 2.2, LAYER_STRIPS);
+        num.attachment_point = AttachmentPoint::MiddleCenter;
+        {
+            let mut e = EntityType::MText(Box::new(num));
+            attach(record, e.common_mut());
+            parts.push(e);
+        }
+
+        // The wires that reach this terminal, above.
+        if !cell.wires.is_empty() {
+            let text = cell.wires.join(",");
+            let mut m = label(&text, [x + CELL_W / 2.0, at[1] + CELL_H + 1.2, at[2]], 1.6, LAYER_STRIPS);
+            m.attachment_point = AttachmentPoint::BottomCenter;
+            let mut e = EntityType::MText(Box::new(m));
+            attach(record, e.common_mut());
+            parts.push(e);
+        }
+
+        // The partition group, below.
+        if !cell.partition.is_empty() {
+            let mut m = label(&cell.partition, [x + CELL_W / 2.0, at[1] - 1.2, at[2]], 1.6, LAYER_STRIPS);
+            m.attachment_point = AttachmentPoint::TopCenter;
+            let mut e = EntityType::MText(Box::new(m));
+            attach(record, e.common_mut());
+            parts.push(e);
+        }
+
+        // A jumper to the next cell arcs over the shared edge.
+        if cell.jumper_right {
+            if i + 1 < cells.len() {
+                let x1 = x + CELL_W;
+                let verts = vec![
+                    Vector2::new(x1 - 2.0, at[1] + CELL_H),
+                    Vector2::new(x1, at[1] + CELL_H + 2.5),
+                    Vector2::new(x1 + 2.0, at[1] + CELL_H),
+                ];
+                let mut arc = LwPolyline::from_points(verts);
+                arc.elevation = at[2];
+                arc.common.layer = LAYER_STRIPS.to_string();
+                arc.common.color = Color::Index(1);
+                attach(record, &mut arc.common);
+                parts.push(EntityType::LwPolyline(arc));
+            }
+        }
+
+        // A partition boundary is a doubled line on the shared edge.
+        if cell.divider_right && i + 1 < cells.len() {
+            for dx in [0.4f64, 1.0] {
+                let verts = vec![
+                    Vector2::new(x + CELL_W + dx, at[1] - 1.0),
+                    Vector2::new(x + CELL_W + dx, at[1] + CELL_H + 1.0),
+                ];
+                let mut div = LwPolyline::from_points(verts);
+                div.elevation = at[2];
+                div.common.layer = LAYER_STRIPS.to_string();
+                div.common.color = Color::Index(1);
+                attach(record, &mut div.common);
+                parts.push(EntityType::LwPolyline(div));
+            }
+        }
+
+        x += CELL_W;
+    }
+    parts
+}
 
 /// Half-width of a terminal block glyph, mm. One rung at the default spacing.
 const TERMINAL_HALF_W: f64 = 5.0;

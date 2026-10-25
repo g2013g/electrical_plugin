@@ -37,6 +37,7 @@ pub const KIND_CABLE: &str = "cable";
 pub const KIND_CONNECTOR: &str = "connector";
 pub const KIND_SIGNAL: &str = "signal";
 pub const KIND_JUMPER: &str = "jumper";
+pub const KIND_STRIPPLOT: &str = "stripplot";
 pub const KIND_XREF: &str = "xref";
 
 // ── drawing layers ───────────────────────────────────────────────────────
@@ -53,6 +54,7 @@ pub const LAYER_TAGS: &str = "EL_TAGS";
 pub const LAYER_TERMINALS: &str = "EL_TERMINALS";
 pub const LAYER_CABLES: &str = "EL_CABLES";
 pub const LAYER_SIGNALS: &str = "EL_SIGNALS";
+pub const LAYER_STRIPS: &str = "EL_STRIPS";
 pub const LAYER_TABLE: &str = "EL_TABLE";
 
 /// Text height for reference-designator labels, mm.
@@ -329,6 +331,10 @@ pub struct TerminalRec {
     pub description: String,
     /// For a multi-level block: the terminal it is a level of.
     pub linked: String,
+    /// The partition group the terminal belongs to (`A`, `B`, `MAIN`…), or
+    /// empty for none. A strip divides where the label changes — the drawn
+    /// strip diagram and the terminal plan mark the boundary.
+    pub partition: String,
     /// Connection points, in drawing order.
     pub pins: Vec<String>,
 }
@@ -362,6 +368,7 @@ impl TerminalRec {
             part_number: String::new(),
             description: String::new(),
             linked: String::new(),
+            partition: String::new(),
             pins: vec!["1".to_string(), "2".to_string()],
         }
     }
@@ -417,6 +424,34 @@ impl JumperRec {
     pub fn touches(&self, designator: &str) -> bool {
         let (a, b) = self.designators();
         a == designator || b == designator
+    }
+}
+
+// ── strip-plot record ────────────────────────────────────────────────────
+
+/// One drawn strip diagram (`EL_STRIP`) — the graphical terminal plan.
+///
+/// The plot is a **render** of the strip's terminals, jumpers, partitions and
+/// wires; this record only carries where it sits and which strip it shows, so
+/// re-drawing a strip replaces its plot and deleting it is the standard
+/// machinery. One plot per strip: a second draw of the same strip replaces
+/// the first.
+#[derive(Debug, Clone, PartialEq)]
+pub struct StripPlotRec {
+    pub el_id: String,
+    pub strip: String,
+    pub origin_x: f64,
+    pub origin_y: f64,
+}
+
+impl StripPlotRec {
+    pub fn new(el_id: &str, strip: &str) -> Self {
+        StripPlotRec {
+            el_id: el_id.to_string(),
+            strip: strip.to_string(),
+            origin_x: 0.0,
+            origin_y: 0.0,
+        }
     }
 }
 

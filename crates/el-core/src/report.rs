@@ -357,6 +357,7 @@ pub fn terminal_plan(idx: &ElIndex) -> TableLayout {
                 dash(&t.rec.part_number),
                 dash(&t.rec.description),
                 dash(&t.rec.linked),
+                dash(&t.rec.partition),
                 match jumped {
                     Some(p) if !p.is_empty() => p.join(", "),
                     _ => EMPTY_CELL.to_string(),
@@ -371,7 +372,7 @@ pub fn terminal_plan(idx: &ElIndex) -> TableLayout {
             rows.len(),
             idx.jumpers.len()
         ),
-        &["STRIP", "NO", "TYPE", "PART", "DESCRIPTION", "LINKED", "JUMPERED TO"],
+        &["STRIP", "NO", "TYPE", "PART", "DESCRIPTION", "LINKED", "PTN", "JUMPERED TO"],
         rows,
     )
 }

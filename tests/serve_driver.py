@@ -52,6 +52,7 @@ XREF_LAYER = "EL_XREF"
 TERMINAL_LAYER = "EL_TERMINALS"
 CABLE_LAYER = "EL_CABLES"
 SIGNAL_LAYER = "EL_SIGNALS"
+STRIPS_LAYER = "EL_STRIPS"
 TABLE_LAYER = "EL_TABLE"
 HILITE_LAYER = "EL_HILITE"
 
@@ -714,6 +715,46 @@ def phase_terminal_jumpers():
     s.run("EL_REPORT TERMINALS term.csv FORCE")
     plan = read(os.path.join(WORK, "term.csv")).replace("\r\n", "\n")
     check("the terminal plan carries a jumper column", "JUMPERED" in plan and "X1:3" in plan, plan[:400])
+    s.close()
+
+
+def phase_strip_editor():
+    print("\n── strip editor: reorder, partitions, diagram ──")
+    s = session()
+    s.send({"op": "new"})
+    s.run("EL_SETTINGS WIREMODE=S WIRE_FORMAT=W%N WIRE_START=1")
+    s.run("EL_TERMINAL screw X1 20,150")
+    s.run("EL_TERMINAL screw X1 40,150 NO=2")
+    s.run("EL_TERMINAL screw X1 60,150 NO=3")
+    s.run("EL_COMPONENT K K1 20,210")
+    s.run("EL_WIRE FROM=K1.A1 TO=X1:1")
+    s.run("EL_WIRENO")
+    s.run("EL_TERMINAL PARTITION X1:3 B")
+    s.run("EL_TERMINAL JUMPER X1:1 X1:2")
+
+    s.run("EL_STRIP X1 20,100")
+    drawn = s.count_on(STRIPS_LAYER)
+    check("the strip diagram draws on EL_STRIPS", drawn >= 6, f"{drawn} entities")
+    s.run("EL_STRIP X1 20,100")
+    check("redrawing a strip replaces its diagram", s.count_on(STRIPS_LAYER) == drawn, f"{drawn} → {s.count_on(STRIPS_LAYER)}")
+
+    # Reorder: old 3,1,2 become 1,2,3. The jumper bridging old 1–2 must move
+    # with its terminals — now numbered 2–3.
+    s.run("EL_TERMINAL REORDER X1 3 1 2")
+    s.run("EL_REPORT TERMINALS term2.csv FORCE")
+    plan = read(os.path.join(WORK, "term2.csv")).replace("\r\n", "\n")
+    rows = [r for r in plan.split("\n") if r.startswith("X1,")]
+    check("the reorder renumbered every terminal", len(rows) == 3, f"{len(rows)} row(s)")
+    jumped = {r.split(",")[1]: r.rstrip() for r in rows}
+    check("the jumper followed its terminals", "3" in jumped.get("2", "") and "2" in jumped.get("3", ""), str(jumped))
+    check("the partition rode its terminal", jumped.get("1", "").count(",B,") == 1, str(jumped.get("1")))
+
+    s.run("EL_STRIP X1 20,100")
+    r = s.run("EL_AUDIT")
+    check("the reordered strip audits clean of jumper faults", "JUMPER_" not in json.dumps(r), json.dumps(r)[:200])
+
+    s.run("EL_STRIP CLEAR X1")
+    check("EL_STRIP CLEAR removes the diagram", s.count_on(STRIPS_LAYER) == 0, f"{s.count_on(STRIPS_LAYER)} left")
     s.close()
 
 
@@ -1446,6 +1487,7 @@ def main():
     phase_wire_gap_and_trim()
     phase_signals_and_project()
     phase_terminal_jumpers()
+    phase_strip_editor()
     phase_failures_and_cleanup()
     phase_library()
     phase_components()

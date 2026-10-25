@@ -120,6 +120,20 @@ impl IndexedJumper {
     }
 }
 
+/// One drawn strip diagram — folded like everything else, one plot per strip.
+#[derive(Debug, Clone, PartialEq)]
+pub struct IndexedStripPlot {
+    pub el_id: String,
+    pub rec: StripPlotRec,
+    pub handles: Vec<u64>,
+}
+
+impl IndexedStripPlot {
+    pub fn primary(&self) -> u64 {
+        self.handles.first().copied().unwrap_or(0)
+    }
+}
+
 /// One indexed ladder.
 ///
 /// Keyed by `el_id`, not by handle, because a ladder is drawn as many entities
@@ -165,6 +179,8 @@ pub struct ElIndex {
     pub signals: BTreeMap<String, IndexedSignal>,
     /// Terminal jumpers by `el_id`.
     pub jumpers: BTreeMap<String, IndexedJumper>,
+    /// Drawn strip diagrams by `el_id`.
+    pub strip_plots: BTreeMap<String, IndexedStripPlot>,
 
     /// Handles whose record failed to decode, with the reason. Surfaced as an
     /// audit finding rather than swallowed: a corrupt record is a real defect.
@@ -183,6 +199,7 @@ pub struct ElIndex {
     handle_to_connector: BTreeMap<u64, String>,
     handle_to_signal: BTreeMap<u64, String>,
     handle_to_jumper: BTreeMap<u64, String>,
+    handle_to_strip_plot: BTreeMap<u64, String>,
     cable_parent_by_tag: BTreeMap<String, String>,
     wire_by_ref: BTreeMap<String, u64>,
     /// Which wire each drawn run belongs to. A gapped wire is several polyline
@@ -357,6 +374,22 @@ impl ElIndex {
                             .or_insert_with(|| IndexedJumper {
                                 el_id: j.el_id.clone(),
                                 rec: j,
+                                handles: Vec::new(),
+                            })
+                            .handles
+                            .push(handle);
+                    }
+                    Err(e) => idx.decode_errors.push((handle, e)),
+                },
+                KIND_STRIPPLOT => match rec.decode_stripplot() {
+                    Ok(sp) => {
+                        idx.el_id_to_handles.entry(sp.el_id.clone()).or_default().push(handle);
+                        idx.handle_to_strip_plot.insert(handle, sp.el_id.clone());
+                        idx.strip_plots
+                            .entry(sp.el_id.clone())
+                            .or_insert_with(|| IndexedStripPlot {
+                                el_id: sp.el_id.clone(),
+                                rec: sp,
                                 handles: Vec::new(),
                             })
                             .handles
@@ -565,6 +598,13 @@ impl ElIndex {
         self.handle_to_jumper
             .get(&handle)
             .and_then(|id| self.jumpers.get(id))
+    }
+
+    /// The strip diagram a drawn part belongs to.
+    pub fn strip_plot_of_handle(&self, handle: u64) -> Option<&IndexedStripPlot> {
+        self.handle_to_strip_plot
+            .get(&handle)
+            .and_then(|id| self.strip_plots.get(id))
     }
 
     /// The marker that owns a cable's identity.

@@ -334,6 +334,30 @@ impl ElRecord {
         })
     }
 
+    // ── strip plot ───────────────────────────────────────────────────────
+
+    pub fn encode_stripplot(rec: &StripPlotRec) -> ElRecord {
+        let mut r = ElRecord::new(KIND_STRIPPLOT, &rec.el_id);
+        r.put_str("STRIP", &rec.strip);
+        r.put_real("OX", rec.origin_x);
+        r.put_real("OY", rec.origin_y);
+        r
+    }
+
+    pub fn decode_stripplot(&self) -> Result<StripPlotRec, DecodeError> {
+        self.check_schema()?;
+        let el_id = self
+            .el_id()
+            .ok_or_else(|| DecodeError("missing ELID key".to_string()))?
+            .to_string();
+        Ok(StripPlotRec {
+            el_id,
+            strip: self.get_str("STRIP").unwrap_or("").to_string(),
+            origin_x: self.get_real("OX").unwrap_or(0.0),
+            origin_y: self.get_real("OY").unwrap_or(0.0),
+        })
+    }
+
     // ── component ────────────────────────────────────────────────────────
 
     pub fn encode_component(rec: &ElComponentRec) -> ElRecord {
@@ -445,6 +469,7 @@ impl ElRecord {
         r.put_str("PARTNO", &rec.part_number);
         r.put_str("DESC", &rec.description);
         r.put_str("LINK", &rec.linked);
+        r.put_str("PTN", &rec.partition);
         for pin in &rec.pins {
             r.put_str("PIN", pin);
         }
@@ -478,6 +503,7 @@ impl ElRecord {
             part_number: self.get_str("PARTNO").unwrap_or("").to_string(),
             description: self.get_str("DESC").unwrap_or("").to_string(),
             linked: self.get_str("LINK").unwrap_or("").to_string(),
+            partition: self.get_str("PTN").unwrap_or("").to_string(),
             pins,
         })
     }

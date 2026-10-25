@@ -21,6 +21,7 @@ pub mod report_cmd;
 pub mod retag;
 pub mod settings;
 pub mod signal;
+pub mod strip;
 pub mod symbol_cmd;
 pub mod terminal;
 pub mod wire;

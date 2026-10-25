@@ -37,6 +37,14 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
             run_jumper(host, &a);
             return;
         }
+        Some("REORDER") => {
+            reorder(host, &a);
+            return;
+        }
+        Some("PARTITION") => {
+            run_partition(host, &a);
+            return;
+        }
         Some("CLEAR") => {
             clear(host);
             return;
@@ -600,5 +608,177 @@ fn jumper_clear(host: &mut dyn HostApi, idx: &el_core::ElIndex, tokens: &[String
     host.push_output(&format!(
         "EL_TERMINAL: {} jumper(s) removed",
         targets.len()
+    ));
+}
+
+/// `EL_TERMINAL REORDER <strip> <no…>` — renumber a strip in a stated order.
+///
+/// The listed terminals (by their current numbers) take positions 1..n in the
+/// order given, which is how a strip is rearranged on paper: the terminals
+/// stay where they are drawn, the numbers follow the stated order. The list
+/// must cover the strip exactly — a partial reorder would collide numbers —
+/// and every jumper is remapped, because a bridge names terminals by number.
+fn reorder(host: &mut dyn HostApi, a: &Args) {
+    let idx = crate::codec::build_index(host.document());
+    let tokens: Vec<String> = a
+        .free
+        .iter()
+        .filter(|t| !t.eq_ignore_ascii_case("REORDER") && !t.contains(','))
+        .cloned()
+        .collect();
+    let Some(strip) = tokens.first().cloned() else {
+        host.push_error("EL_TERMINAL: name the strip and the order — EL_TERMINAL REORDER X1 3 1 2");
+        return;
+    };
+    let order: Vec<String> = tokens[1..].to_vec();
+    if order.is_empty() {
+        host.push_error("EL_TERMINAL: what order? list the current numbers, e.g. REORDER X1 3 1 2");
+        return;
+    }
+
+    // The strip's terminals, in drawn order, matched against the stated one.
+    let mut terminals: Vec<&el_core::index::IndexedTerminal> = idx
+        .terminals
+        .values()
+        .filter(|t| t.rec.tag_strip.eq_ignore_ascii_case(&strip))
+        .collect();
+    if terminals.is_empty() {
+        host.push_error(&format!("EL_TERMINAL: no terminals on strip {strip:?}"));
+        return;
+    }
+    if order.len() != terminals.len() {
+        host.push_error(&format!(
+            "EL_TERMINAL: the order names {} terminal(s) but strip {strip} has {} — a reorder \
+             must cover the strip exactly",
+            order.len(),
+            terminals.len()
+        ));
+        return;
+    }
+    let mut mapping: Vec<(&el_core::index::IndexedTerminal, String)> = Vec::new();
+    for (i, token) in order.iter().enumerate() {
+        // A listed token may be a bare number or a full designator.
+        let wanted = token
+            .rsplit_once(':')
+            .map(|(_, n)| n.to_string())
+            .unwrap_or_else(|| token.clone());
+        let Some(t) = terminals
+            .iter()
+            .find(|t| !mapping.iter().any(|(used, _)| used.rec.el_id == t.rec.el_id)
+                && (t.rec.number == wanted || t.rec.designator().eq_ignore_ascii_case(token)))
+        else {
+            host.push_error(&format!(
+                "EL_TERMINAL: {token:?} is not an unclaimed terminal of strip {strip}"
+            ));
+            return;
+        };
+        mapping.push((t, (i + 1).to_string()));
+    }
+
+    // Old number → new number, so jumpers follow their terminals.
+    let remap: std::collections::BTreeMap<String, String> = mapping
+        .iter()
+        .map(|(t, new)| (t.rec.number.clone(), new.clone()))
+        .collect();
+
+    host.push_undo("EL_TERMINAL REORDER");
+    let mut updated: Vec<TerminalRec> = Vec::new();
+    for (t, new_number) in &mapping {
+        let mut rec = t.rec.clone();
+        rec.number = new_number.clone();
+        rec.strip_seq = new_number.parse::<i32>().unwrap_or(0);
+        let record = ElRecord::encode_terminal(&rec);
+        for h in idx.handles_for_el_id(&rec.el_id) {
+            crate::codec::write_el(host, Handle::new(*h), &record);
+        }
+        updated.push(rec);
+    }
+    // A bridge names terminals by number; the reorder remaps every one.
+    let mut jumpers_moved = 0usize;
+    for j in idx.jumpers.values() {
+        let (a, b) = (
+            remap.get(&j.rec.a_number).cloned(),
+            remap.get(&j.rec.b_number).cloned(),
+        );
+        if a.is_none() && b.is_none() {
+            continue;
+        }
+        let mut rec = j.rec.clone();
+        if let Some(n) = a {
+            rec.a_number = n;
+        }
+        if let Some(n) = b {
+            rec.b_number = n;
+        }
+        let record = ElRecord::encode_jumper(&rec);
+        for h in idx.handles_for_el_id(&rec.el_id) {
+            crate::codec::write_el(host, Handle::new(*h), &record);
+        }
+        jumpers_moved += 1;
+    }
+
+    rebuild_glyphs(host, &idx, &updated);
+    host.bump_geometry();
+    host.set_dirty();
+    host.push_output(&format!(
+        "EL_TERMINAL: strip {strip} reordered — {} terminal(s) renumbered, {jumpers_moved} jumper(s) remapped",
+        updated.len()
+    ));
+    // A drawn diagram of this strip is now stale; say so rather than guess
+    // where its replacement should go.
+    if idx
+        .strip_plots
+        .values()
+        .any(|sp| sp.rec.strip.eq_ignore_ascii_case(&strip))
+    {
+        host.push_info(&format!(
+            "  the strip diagram of {strip} is stale — run EL_STRIP {strip} to redraw it"
+        ));
+    }
+}
+
+/// `EL_TERMINAL PARTITION <designator> <name|CLEAR>` — put a terminal in a
+/// partition group. The strip divides where the label changes.
+fn run_partition(host: &mut dyn HostApi, a: &Args) {
+    let idx = crate::codec::build_index(host.document());
+    let tokens: Vec<String> = a
+        .free
+        .iter()
+        .filter(|t| !t.eq_ignore_ascii_case("PARTITION"))
+        .cloned()
+        .collect();
+    let Some(token) = tokens.first() else {
+        host.push_error("EL_TERMINAL: name the terminal — EL_TERMINAL PARTITION X1:3 B (CLEAR removes)");
+        return;
+    };
+    let Some(t) = resolve_terminal(&idx, token) else {
+        host.push_error(&format!("EL_TERMINAL: no terminal matches {token:?}"));
+        return;
+    };
+    let mut rec = t.rec.clone();
+    let clear = tokens.get(1).map(|s| s.eq_ignore_ascii_case("CLEAR")).unwrap_or(false);
+    rec.partition = match clear {
+        true => String::new(),
+        false => tokens.get(1).cloned().unwrap_or_default(),
+    };
+    if !clear && rec.partition.is_empty() {
+        host.push_error("EL_TERMINAL: PARTITION needs a group name, or CLEAR to remove one");
+        return;
+    }
+    let record = ElRecord::encode_terminal(&rec);
+    host.push_undo("EL_TERMINAL PARTITION");
+    for h in idx.handles_for_el_id(&rec.el_id) {
+        crate::codec::write_el(host, Handle::new(*h), &record);
+    }
+    rebuild_glyphs(host, &idx, std::slice::from_ref(&rec));
+    host.bump_geometry();
+    host.set_dirty();
+    host.push_output(&format!(
+        "EL_TERMINAL: {} partition {}",
+        rec.designator(),
+        match rec.partition.is_empty() {
+            true => "cleared".to_string(),
+            false => format!("set to {}", rec.partition),
+        }
     ));
 }

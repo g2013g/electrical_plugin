@@ -64,7 +64,8 @@ logic is testable without a CAD host and is insulated from ABI churn.
 | `EL_XREF [ALL \| <tag>]` | Write cross-reference annotations. `CLEAR` removes them. |
 | `EL_RETAG [ALL \| <family>] [START=n] [DRYRUN]` | Renumber device tags. `FIX`/`UNFIX <tag>` pins one. |
 | `EL_LIB [LIST \| SHOW <name> \| FAMILIES \| PATH [LOCAL\|GLOBAL\|<file>] \| EXPORT \| RELOAD]` | Inspect and switch the symbol library. |
-| `EL_TERMINAL [kind] [strip] [x,y] [NO=] [PART=] [DESC=] [LINK=]` | Place a terminal block. Kinds: screw, spring, ground, fused, disconnect, multi, test. `NUMBER` renumbers every strip; `JUMPER <a> <b>` bridges two terminals of a strip into one circuit (nets merge across it; `JUMPER CLEAR <a>`, `JUMPER LIST`); `LIST`, `CLEAR`. |
+| `EL_TERMINAL [kind] [strip] [x,y] [NO=] [PART=] [DESC=] [LINK=]` | Place a terminal block. Kinds: screw, spring, ground, fused, disconnect, multi, test. `NUMBER` renumbers every strip; `REORDER <strip> <no…>` renumbers in a stated order (jumpers remap with their terminals); `PARTITION <d> <name\|CLEAR>` puts a terminal in a partition group; `JUMPER <a> <b>` bridges two terminals of a strip into one circuit (nets merge across it; `JUMPER CLEAR <a>`, `JUMPER LIST`); `LIST`, `CLEAR`. |
+| `EL_STRIP [<strip>] [x,y] \| CLEAR [<strip>\|ALL] \| LIST` | Draw the strip diagram: one box per terminal with its number inside, wires above, partition below, jumper bridges arcing between bridged cells, doubled lines at partition boundaries. One plot per strip — redrawing replaces. |
 | `EL_CABLE [tag] [x,y] [COND=] [COLOR=] [GAUGE=] [MFG=] [CAT=] [PART=] [FROM=] [TO=]` | Place a cable marker; the next free conductor is taken automatically. `LIST`, `CLEAR`. |
 | `EL_CONNECTOR [refdes] [x,y] [PINS=a,b,c \| COUNT=n] [SPACING=] [PERROW=] [ORIENT=] [WNC]` | Place a parametric connector. `EDIT <ref>` changes its pin field; `LIST`, `CLEAR`. |
 | `EL_CATALOG [LIST \| SEARCH <text> \| FAMILY <code>]` | Browse the parts catalogue. `ASSIGN <item> MFG= CAT=`, `CLEAR <item>`, `PATH`. |
@@ -344,12 +345,15 @@ the wire-crossing gap that Phase 1 deferred (2026-10-25):
 
 The plan's phases are complete. What is deferred, named rather than forgotten:
 
-A **terminal strip editor** (ACADE's TSE) — the electrical core is in: `EL_TERMINAL
-JUMPER` bridges two terminals of a strip into one circuit (nets merge across the
-jumper, the terminal plan lists it, deleting a terminal takes its jumper along),
-and the audit refuses a dangling or cross-strip bridge. Still missing from full
-TSE parity: strip **reordering**, **partitions**, and a drawn strip diagram.
-Also: **panel layout** — footprints, item numbers and balloons — **PLC I/O**
+A **terminal strip editor** (ACADE's TSE) — the electrical core and the drawn
+diagram are in: `EL_TERMINAL JUMPER` bridges terminals into one circuit (nets
+merge, the plan lists it, deletion cascades); `REORDER` renumbers a strip in a
+stated order with jumpers remapping; `PARTITION` groups a strip and marks the
+boundaries; `EL_STRIP` draws the diagram — boxes, wires, jumper arcs, partition
+dividers — one plot per strip, replaced on redraw. The audit refuses dangling
+or cross-strip bridges. Still missing from full TSE parity: multi-tier
+**graphical terminal diagrams** (per-terminal both-sides drawings). Also:
+**panel layout** — footprints, item numbers and balloons — **PLC I/O**
 (needs a module data file), and **`EL_TITLEBLOCK`** (needs a title block to
 write into). The whole parity queue, in priority order, lives in
 [`docs/PARITY_PLAN.md`](docs/PARITY_PLAN.md).
