@@ -1,0 +1,14 @@
+[package]
+name = "el-plugin"
+version.workspace = true
+edition.workspace = true
+license.workspace = true
+authors.workspace = true
+description = "Electrical (control-schematic) plugin for Open CAD Studio: ladders, wire numbering, component tagging, cross-references, terminals, cables, reports and audit. Loaded as a cdylib."
+
+[lib]
+crate-type = ["cdylib"]
+
+[dependencies]
+el-core = { path = "../el-core" }
+ocs_plugin_api = { workspace = true }

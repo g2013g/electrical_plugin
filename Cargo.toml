@@ -1,0 +1,25 @@
+[workspace]
+resolver = "2"
+members = ["crates/el-core", "crates/el-plugin"]
+
+[workspace.package]
+version = "0.1.4"
+edition = "2021"
+license = "GPL-3.0-only"
+authors = ["OpenCADStudio electrical plugin contributors"]
+
+[workspace.dependencies]
+# The stable plugin contract, built against the pristine OpenCAD Studio
+# v2026.40.1 checkout (API version 7, min supported 3, codec re-exported as
+# `host::codec`). Host v2026.40.1 REQUIRES the manifest to declare
+# acadrust_source matching the host fingerprint (@fe69506); the codec itself
+# flows in transitively from the checkout's ocs_plugin_api (opencadcodec,
+# renamed from cadcodec).
+ocs_plugin_api = { path = "../OpenCADStudio/crates/ocs_plugin_api", features = ["host"] }
+uuid = { version = "1", features = ["v4"] }
+
+[profile.release]
+# Panic unwinding must stay enabled: the plugin runner and export_plugin!
+# catch panics at the C boundary. panic="abort" here would turn a plugin bug
+# into a runner crash.
+panic = "unwind"

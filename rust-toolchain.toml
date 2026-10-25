@@ -1,0 +1,21 @@
+# Reproducible builds AND a loadable DLL.
+#
+# For plugin API >= 4 the host's load gate compares the plugin's declared
+# `[opencad] rustc_version` token-for-token with its own `rustc --version`
+# (host `src/plugin/external.rs` → `version_info::rustc_versions_compatible`).
+# Rust has no stable ABI, so a DLL built by a different compiler release is
+# rejected outright with:
+#   "Plugin built with <x>, host requires <y> - rebuild required"
+#
+# The host binary v2026.42.0 was built with, and requires (verified from the
+# installed MSI exe's embedded record 2026-10-24):
+#   rustc 1.99.1 (58cf8f9c3 2026-10-13) on x86_64-pc-windows-msvc
+# which must equal `rustc_version` in crates/el-plugin/plugin.toml.
+#
+# The channel is deliberately left floating so a build never needs to download a
+# toolchain. That makes `rustc --version` a prerequisite to check, not an
+# assumption: if `stable` ever advances past 1.99.0 this DLL stops loading, and both
+# this comment, plugin.toml's `rustc_version`, and the runbook's compiler
+# requirement have to move together with the host.
+[toolchain]
+channel = "stable"

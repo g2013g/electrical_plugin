@@ -1,0 +1,42 @@
+# Deployed beside the plugin binary in
+#   <config>/OpenCADStudio/plugins/opencad.electrical/
+# Target host: Open CAD Studio v2026.42.0 (plugin API 10).
+#
+# Load-gate contract for api_version >= 4 (host `src/plugin/external.rs`):
+#   rustc_version   REQUIRED — token-for-token match with the host's
+#                   `rustc --version`; absent or empty is REJECTED.
+#   acadrust_source REQUIRED since host v2026.38 — the declared fingerprint
+#                   must equal the host's embedded acadrust source, and the
+#                   DLL must be built against the same codec rev (it flows in
+#                   transitively from the v2026.42.0 checkout's ocs_plugin_api).
+#
+# Host v2026.42.0 embeds this record (extracted from the installed MSI exe
+# "C:\Program Files\Open CAD Studio\OpenCADStudio.exe", 2026-10-24):
+#   ocs_version        2026.42.0
+#   api_version        10         (min supported 3)
+#   acadrust_version   0.6.4
+#   acadrust_source    git+https://github.com/HakanSeven12/opencadcodec.git?rev=5d4f11a#5d4f11ae38758caec540bc9819ff2c4120eeadb4
+#   rustc_version      rustc 1.99.1 (58cf8f9c3 2026-10-13)
+#
+# API 7→10 (v2026.42) code change: codec 0.6.4 boxes EntityType::MText
+# (EntityType::MText(Box<MText>)) — constructions wrap in Box::new, match
+# bindings deref (see el-plugin/src/geometry.rs).
+
+[plugin]
+id = "opencad.electrical"
+name = "Electrical"
+version = "0.1.4"
+description = "Electrical control-schematic design: ladders and line references, wire numbering, component tagging and cross-references, terminals, cables, reports and audit."
+author = "electrical plugin contributors"
+license = "GPL-3.0-only"
+
+[opencad]
+api_version = 10
+ribbon_order = 70
+command_prefixes = ["EL_"]
+xdata_apps = ["OCSEL"]
+rustc_version = "rustc 1.99.1 (58cf8f9c3 2026-10-13)"
+# REQUIRED since host v2026.38: the declared fingerprint must equal the
+# host's embedded acadrust source; the build pins the same rev via the
+# checkout's ocs_plugin_api dependency.
+acadrust_source = "git+https://github.com/HakanSeven12/opencadcodec.git?rev=5d4f11a#5d4f11ae38758caec540bc9819ff2c4120eeadb4"
