@@ -540,6 +540,23 @@ pub fn run_trim(host: &mut dyn HostApi, args: &[&str]) {
     host.bump_geometry();
     host.set_dirty();
 
+    // A signal arrow anchored to the trimmed end rides with it — an arrow
+    // left behind would point at a wire end that no longer exists. (The
+    // record's flag is "at the to end"; the trim knows "the moved end is the
+    // from end", so align on "to" before comparing.)
+    let moved_is_to = if trim_head { !head_is_from } else { head_is_from };
+    for s in idx.signals.values() {
+        if s.rec.wire_el_id != rec.el_id || s.rec.at_to_end != moved_is_to {
+            continue;
+        }
+        if el_core::geom::dist([s.rec.origin_x, s.rec.origin_y], [snapped[0], snapped[1]]) > 1e-9 {
+            let mut srec = s.rec.clone();
+            srec.origin_x = snapped[0];
+            srec.origin_y = snapped[1];
+            crate::cmds::signal::render_one(host, &idx, &srec);
+        }
+    }
+
     // The wire got shorter or longer; other gapped wires may now cross it
     // differently, and their runs are a render too.
     refresh_gapped(host, &idx);

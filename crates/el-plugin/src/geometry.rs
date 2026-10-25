@@ -379,6 +379,7 @@ pub const LAYER_TERMINALS: &str = el_core::model::LAYER_TERMINALS;
 
 /// The layer cable markers are drawn on.
 pub const LAYER_CABLES: &str = el_core::model::LAYER_CABLES;
+pub const LAYER_SIGNALS: &str = el_core::model::LAYER_SIGNALS;
 
 /// Half-width of a terminal block glyph, mm. One rung at the default spacing.
 const TERMINAL_HALF_W: f64 = 5.0;
@@ -567,6 +568,71 @@ pub fn cable_marker_entities(
     if !text.is_empty() {
         let t = local([0.0, -half_h * 0.5]);
         let mut m = label(text, [t.x, t.y, at[2]], LABEL_HEIGHT, LAYER_CABLES);
+        m.rotation = rot_rad;
+        let mut e = EntityType::MText(Box::new(m));
+        attach(record, e.common_mut());
+        parts.push(e);
+    }
+    parts
+}
+
+// ── signals ──────────────────────────────────────────────────────────────
+
+/// Build a signal arrow: a triangle naming its direction, a tail along the
+/// wire it anchors to, and a label.
+///
+/// **Every drawn part carries the record** — the same rule a component's parts
+/// follow — so the arrow is one object to pick, move and delete no matter
+/// which part of it a user grabs. `note` is the cross-sheet pairing the
+/// project register supplies (`→ 02`, `← 01`); it is computed by the caller at
+/// render time so a sync can refresh labels without touching records.
+pub fn signal_entities(
+    record: &ElRecord,
+    rec: &el_core::model::SignalRec,
+    at: [f64; 3],
+    rot_rad: f64,
+    note: &str,
+) -> Vec<EntityType> {
+    use el_core::model::SignalDirection;
+    let anchor = [at[0], at[1]];
+    let local = |p: [f64; 2]| {
+        let r = rotate(p, rot_rad);
+        Vector2::new(anchor[0] + r[0], anchor[1] + r[1])
+    };
+
+    // A source arrow points away from the sheet (drawn pointing +x at rest);
+    // a destination arrow points into it. The tail sits behind the point so
+    // the arrowhead lands exactly on the wire end.
+    let (tip, back1, back2, tail) = match rec.direction {
+        SignalDirection::Source => ([4.0, 0.0], [0.0, 1.8], [0.0, -1.8], [-6.0, 0.0]),
+        SignalDirection::Dest => ([-4.0, 0.0], [0.0, 1.8], [0.0, -1.8], [6.0, 0.0]),
+    };
+    let head = vec![local(tip), local(back1), local(back2)];
+    let mut tri = LwPolyline::from_points(head);
+    tri.is_closed = true;
+    tri.elevation = at[2];
+    tri.common.layer = LAYER_SIGNALS.to_string();
+    tri.common.color = Color::Index(1);
+    attach(record, &mut tri.common);
+
+    let mut tail_line = LwPolyline::from_points(vec![local(tail), local([0.0, 0.0])]);
+    tail_line.elevation = at[2];
+    tail_line.common.layer = LAYER_SIGNALS.to_string();
+    tail_line.common.color = Color::Index(1);
+    attach(record, &mut tail_line.common);
+
+    let mut parts = vec![EntityType::LwPolyline(tri), EntityType::LwPolyline(tail_line)];
+
+    let text = match note.is_empty() {
+        true => rec.name.clone(),
+        false => format!("{} {note}", rec.name),
+    };
+    if !text.is_empty() {
+        let t = local(match rec.direction {
+            SignalDirection::Source => [-2.0, 2.6],
+            SignalDirection::Dest => [2.0, 2.6],
+        });
+        let mut m = label(&text, [t.x, t.y, at[2]], LABEL_HEIGHT, LAYER_SIGNALS);
         m.rotation = rot_rad;
         let mut e = EntityType::MText(Box::new(m));
         attach(record, e.common_mut());

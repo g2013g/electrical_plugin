@@ -149,6 +149,16 @@ fn resolve(
         return Ok((format!("ladder {}", l.el_id), l.handles.clone(), "ladder"));
     }
 
+    if let Some(s) = capture
+        .index
+        .signals
+        .values()
+        .find(|s| s.rec.name.eq_ignore_ascii_case(token))
+    {
+        let handles = capture.index.handles_for_el_id(&s.rec.el_id).to_vec();
+        return Ok((format!("signal {}", s.rec.name), handles, "signal"));
+    }
+
     // A tag names a *device*, and a device is its parent plus every contact
     // sharing its tag. Deleting only one of them would leave the rest behind
     // with a tag that no longer resolves — so the whole group goes.
@@ -202,6 +212,10 @@ fn resolve_handle(
     if let Some(c) = capture.index.component_of_handle(handle) {
         let handles = capture.index.handles_for_el_id(&c.rec.el_id).to_vec();
         return Ok((c.rec.tag.clone(), handles, "component"));
+    }
+    if let Some(s) = capture.index.signal_of_handle(handle) {
+        let handles = capture.index.handles_for_el_id(&s.rec.el_id).to_vec();
+        return Ok((format!("signal {}", s.rec.name), handles, "signal"));
     }
     Err(format!("{token} is not an electrical object"))
 }

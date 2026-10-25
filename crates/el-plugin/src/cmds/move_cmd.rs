@@ -15,7 +15,7 @@ use ocs_plugin_api::host::codec::Handle;
 use ocs_plugin_api::host::HostApi;
 
 use el_core::codec::ElRecord;
-use el_core::model::{ConnectorRec, ElComponentRec, TerminalRec};
+use el_core::model::{ConnectorRec, ElComponentRec, SignalRec, TerminalRec};
 use el_core::symbol::SymbolLibrary;
 use el_core::ElIndex;
 
@@ -111,6 +111,7 @@ pub enum Target {
     Component(ElComponentRec),
     Terminal(TerminalRec),
     Connector(ConnectorRec),
+    Signal(SignalRec),
     Ladder(String),
     Wire(u64),
 }
@@ -140,6 +141,14 @@ pub fn resolve(capture: &Capture, token: &str) -> Result<Target, String> {
     {
         return Ok(Target::Connector(x.rec.clone()));
     }
+    if let Some(s) = capture
+        .index
+        .signals
+        .values()
+        .find(|s| s.rec.name.eq_ignore_ascii_case(token))
+    {
+        return Ok(Target::Signal(s.rec.clone()));
+    }
     if let Some(l) = capture.index.ladder_by_el_id(token) {
         return Ok(Target::Ladder(l.el_id.clone()));
     }
@@ -165,6 +174,9 @@ fn classify_handle(idx: &ElIndex, handle: u64) -> Result<Target, String> {
     }
     if let Some(x) = idx.connector_of_handle(handle) {
         return Ok(Target::Connector(x.rec.clone()));
+    }
+    if let Some(s) = idx.signal_of_handle(handle) {
+        return Ok(Target::Signal(s.rec.clone()));
     }
     if idx.wires.contains_key(&handle) {
         return Ok(Target::Wire(handle));
@@ -199,6 +211,7 @@ pub fn anchor_of(idx: &ElIndex, target: &Target) -> Result<[f64; 2], String> {
         Target::Component(r) => Ok(r.origin()),
         Target::Terminal(r) => Ok([r.origin_x, r.origin_y]),
         Target::Connector(r) => Ok([r.origin_x, r.origin_y]),
+        Target::Signal(r) => Ok([r.origin_x, r.origin_y]),
         Target::Ladder(id) => idx
             .ladder_by_el_id(id)
             .map(|l| [l.rec.origin_x, l.rec.origin_y])
@@ -315,6 +328,39 @@ fn transform(
             let what = format!(
                 "{} to ({}, {})",
                 rec.ref_des,
+                el_core::fmt_mm(rec.origin_x),
+                el_core::fmt_mm(rec.origin_y)
+            );
+            (rec.el_id.clone(), parts, record, placement, what)
+        }
+        Target::Signal(rec) => {
+            let mut rec = rec.clone();
+            rec.origin_x = new_origin[0];
+            rec.origin_y = new_origin[1];
+            let record = ElRecord::encode_signal(&rec);
+            let note = crate::cmds::project::load(host)
+                .ok()
+                .flatten()
+                .and_then(|p| {
+                    p.pairing_note(&rec.name, rec.direction == el_core::model::SignalDirection::Source)
+                })
+                .unwrap_or_default();
+            let parts = crate::geometry::signal_entities(
+                &record,
+                &rec,
+                [rec.origin_x, rec.origin_y, 0.0],
+                0.0,
+                &note,
+            );
+            let placement = Placement {
+                node_id: String::new(),
+                origin: [rec.origin_x, rec.origin_y],
+                rotation_deg: 0.0,
+                kind: attach::PlacementKind::Terminal,
+            };
+            let what = format!(
+                "signal {} to ({}, {})",
+                rec.name,
                 el_core::fmt_mm(rec.origin_x),
                 el_core::fmt_mm(rec.origin_y)
             );

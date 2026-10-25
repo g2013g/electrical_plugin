@@ -184,6 +184,29 @@ pub fn reseat_wires(
                 }
             }
         }
+
+        // A signal arrow anchored to this wire's end rides the re-seat: its
+        // anchor *is* that wire end, and an arrow left behind points at
+        // nothing.
+        if touched {
+            for s in idx.signals.values() {
+                if s.rec.wire_el_id != wire.rec.el_id {
+                    continue;
+                }
+                let end = if s.rec.at_to_end {
+                    points.len() - 1
+                } else {
+                    0
+                };
+                let pt = points[end];
+                if el_core::geom::dist([s.rec.origin_x, s.rec.origin_y], [pt[0], pt[1]]) > 1e-9 {
+                    let mut rec = s.rec.clone();
+                    rec.origin_x = pt[0];
+                    rec.origin_y = pt[1];
+                    crate::cmds::signal::render_one(host, idx, &rec);
+                }
+            }
+        }
     }
 
     // Runs are a render: once ends have moved, every gapped wire is re-split

@@ -88,6 +88,23 @@ impl IndexedConnector {
     }
 }
 
+/// One indexed signal arrow.
+///
+/// Like a component: drawn as several primitives sharing one record, folded
+/// by `el_id`, deletable as a unit no matter which part a user picked.
+#[derive(Debug, Clone, PartialEq)]
+pub struct IndexedSignal {
+    pub el_id: String,
+    pub rec: SignalRec,
+    pub handles: Vec<u64>,
+}
+
+impl IndexedSignal {
+    pub fn primary(&self) -> u64 {
+        self.handles.first().copied().unwrap_or(0)
+    }
+}
+
 /// One indexed ladder.
 ///
 /// Keyed by `el_id`, not by handle, because a ladder is drawn as many entities
@@ -129,6 +146,8 @@ pub struct ElIndex {
     pub cables: BTreeMap<String, IndexedCable>,
     /// Connectors by `el_id`.
     pub connectors: BTreeMap<String, IndexedConnector>,
+    /// Signal arrows by `el_id`.
+    pub signals: BTreeMap<String, IndexedSignal>,
 
     /// Handles whose record failed to decode, with the reason. Surfaced as an
     /// audit finding rather than swallowed: a corrupt record is a real defect.
@@ -145,6 +164,7 @@ pub struct ElIndex {
     handle_to_terminal: BTreeMap<u64, String>,
     handle_to_cable: BTreeMap<u64, String>,
     handle_to_connector: BTreeMap<u64, String>,
+    handle_to_signal: BTreeMap<u64, String>,
     cable_parent_by_tag: BTreeMap<String, String>,
     wire_by_ref: BTreeMap<String, u64>,
     /// Which wire each drawn run belongs to. A gapped wire is several polyline
@@ -287,6 +307,22 @@ impl ElIndex {
                             .or_insert_with(|| IndexedConnector {
                                 el_id: x.el_id.clone(),
                                 rec: x,
+                                handles: Vec::new(),
+                            })
+                            .handles
+                            .push(handle);
+                    }
+                    Err(e) => idx.decode_errors.push((handle, e)),
+                },
+                KIND_SIGNAL => match rec.decode_signal() {
+                    Ok(s) => {
+                        idx.el_id_to_handles.entry(s.el_id.clone()).or_default().push(handle);
+                        idx.handle_to_signal.insert(handle, s.el_id.clone());
+                        idx.signals
+                            .entry(s.el_id.clone())
+                            .or_insert_with(|| IndexedSignal {
+                                el_id: s.el_id.clone(),
+                                rec: s,
                                 handles: Vec::new(),
                             })
                             .handles
@@ -481,6 +517,13 @@ impl ElIndex {
         self.handle_to_connector
             .get(&handle)
             .and_then(|id| self.connectors.get(id))
+    }
+
+    /// The signal arrow a drawn part belongs to.
+    pub fn signal_of_handle(&self, handle: u64) -> Option<&IndexedSignal> {
+        self.handle_to_signal
+            .get(&handle)
+            .and_then(|id| self.signals.get(id))
     }
 
     /// The marker that owns a cable's identity.

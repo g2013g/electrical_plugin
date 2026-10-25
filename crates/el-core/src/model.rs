@@ -35,6 +35,7 @@ pub const KIND_COMPONENT: &str = "component";
 pub const KIND_TERMINAL: &str = "terminal";
 pub const KIND_CABLE: &str = "cable";
 pub const KIND_CONNECTOR: &str = "connector";
+pub const KIND_SIGNAL: &str = "signal";
 pub const KIND_XREF: &str = "xref";
 
 // ── drawing layers ───────────────────────────────────────────────────────
@@ -50,6 +51,7 @@ pub const LAYER_XREF: &str = "EL_XREF";
 pub const LAYER_TAGS: &str = "EL_TAGS";
 pub const LAYER_TERMINALS: &str = "EL_TERMINALS";
 pub const LAYER_CABLES: &str = "EL_CABLES";
+pub const LAYER_SIGNALS: &str = "EL_SIGNALS";
 pub const LAYER_TABLE: &str = "EL_TABLE";
 
 /// Text height for reference-designator labels, mm.
@@ -426,6 +428,73 @@ impl CableRec {
     /// A parent marker is the one that owns the cable's identity.
     pub fn is_parent(&self) -> bool {
         self.parent_tag.is_empty()
+    }
+}
+
+// ── signal record ────────────────────────────────────────────────────────
+
+/// Which way a signal arrow points in the drawing's story.
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default)]
+pub enum SignalDirection {
+    /// The signal *leaves* this sheet here.
+    #[default]
+    Source,
+    /// The signal *arrives* on this sheet here.
+    Dest,
+}
+
+impl SignalDirection {
+    pub fn as_str(self) -> &'static str {
+        match self {
+            SignalDirection::Source => "SOURCE",
+            SignalDirection::Dest => "DEST",
+        }
+    }
+    pub fn parse(s: &str) -> Option<Self> {
+        match s.trim().to_ascii_uppercase().as_str() {
+            "SOURCE" | "SRC" | "OUT" | "GOING" => Some(SignalDirection::Source),
+            "DEST" | "DESTINATION" | "IN" | "COMING" => Some(SignalDirection::Dest),
+            _ => None,
+        }
+    }
+}
+
+/// One signal arrow: an off-sheet continuation marker anchored to a wire end.
+///
+/// ACADE calls these source/destination arrows. The arrow does not change a
+/// wire's connectivity — it *additionally* declares that the signal continues
+/// on another sheet. Sheets pair through the project register (`el-core/src/
+/// project.rs`): a destination arrow labels itself with the sheet its source
+/// lives on, once both sheets have synced.
+#[derive(Debug, Clone, PartialEq)]
+pub struct SignalRec {
+    pub el_id: String,
+    /// The signal's name (`STOP`, `E-STOP-2`); the pairing key across sheets.
+    pub name: String,
+    pub direction: SignalDirection,
+    /// Where the arrow sits, in drawing units — recorded because a signal is
+    /// drawn as several primitives and its anchor is not recoverable from any
+    /// one of them.
+    pub origin_x: f64,
+    pub origin_y: f64,
+    /// The wire the arrow anchors to, by that wire's `el_id` (never a handle).
+    pub wire_el_id: String,
+    /// Which end of the wire: `false` = the from/first end, `true` = the
+    /// to/last end. What lets a re-seat carry the arrow along.
+    pub at_to_end: bool,
+}
+
+impl SignalRec {
+    pub fn new(el_id: &str, name: &str, direction: SignalDirection) -> Self {
+        SignalRec {
+            el_id: el_id.to_string(),
+            name: name.to_string(),
+            direction,
+            origin_x: 0.0,
+            origin_y: 0.0,
+            wire_el_id: String::new(),
+            at_to_end: false,
+        }
     }
 }
 

@@ -16,6 +16,7 @@ pub mod model;
 pub mod net;
 pub mod numbering;
 pub mod paths;
+pub mod project;
 pub mod report;
 pub mod symbol;
 pub mod tables;

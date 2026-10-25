@@ -51,6 +51,7 @@ TAG_LAYER = "EL_TAGS"
 XREF_LAYER = "EL_XREF"
 TERMINAL_LAYER = "EL_TERMINALS"
 CABLE_LAYER = "EL_CABLES"
+SIGNAL_LAYER = "EL_SIGNALS"
 TABLE_LAYER = "EL_TABLE"
 HILITE_LAYER = "EL_HILITE"
 
@@ -548,6 +549,90 @@ def phase_wire_gap_and_trim():
     s.run("EL_WIRENO")
     labels = s.count_on(WIRENO_LAYER)
     check("numbering survives the trims", labels == 2, f"{labels} labels")
+    s.close()
+
+
+def phase_signals_and_project():
+    print("\n── project register and signal arrows ──")
+    # The project file and its drawings live in the shared work folder; a
+    # stale register from an earlier run would make "NEW" and the pairing
+    # assertions read yesterday's state.
+    for stale in ["el-project.json", "sheet01.dxf", "sheet02.dxf", "sheet02-labeled.dxf"]:
+        try:
+            os.remove(os.path.join(WORK, stale))
+        except OSError:
+            pass
+    s = session()
+    s.send({"op": "new"})
+    s.run("EL_SETTINGS SHEET=01 DRAWING=MAIN WIREMODE=S WIRE_FORMAT=W%N WIRE_START=1")
+    s.run("EL_WIRE 20,200 90,200")
+    s.run("EL_WIRENO")
+    # The project file lives beside the drawing, so the drawing is saved first.
+    s.send({"op": "save", "path": "sheet01.dxf"})
+
+    text = s.run_and_collect("EL_PROJECT SYNC")
+    check("syncing without a project is reported", "no project" in text, text[:200])
+    check("EL_PROJECT NEW names the project", s.run("EL_PROJECT NEW PANEL-01").get("ok") is True)
+    text = s.run_and_collect("EL_PROJECT NEW PANEL-01")
+    check("a second NEW is refused", "already exists" in text, text[:200])
+
+    s.run("EL_SIGNAL STOP SOURCE 20,200")
+    arrows = s.count_on(SIGNAL_LAYER)
+    check("a source arrow draws on EL_SIGNALS", arrows >= 2, f"{arrows} on {SIGNAL_LAYER}")
+    s.run("EL_SIGNAL STOP DEST 90,200")
+    check("a destination arrow joins it", s.count_on(SIGNAL_LAYER) >= 6, f"{s.count_on(SIGNAL_LAYER)} on {SIGNAL_LAYER}")
+
+    text = s.run_and_collect("EL_SIGNAL STOP SOURCE 20,200")
+    check("a duplicate arrow is refused", "already exists" in text, text[:200])
+    text = s.run_and_collect("EL_SIGNAL NOWIRE SOURCE 50,50")
+    check("an arrow with no wire end nearby is refused", "no wire end" in text, text[:200])
+
+    r = s.run("EL_AUDIT")
+    # The bare wire is dangling by design (drawn by eye, no nodes), which the
+    # audit already reports; what matters here is that the arrows add nothing.
+    check("the audit adds no signal findings", "SIGNAL_" not in json.dumps(r), json.dumps(r)[:200])
+
+    s.run("EL_PROJECT SYNC")
+    reg = read(os.path.join(WORK, "el-project.json"))
+    check("the register carries the source sheet", '"source_sheet": "01"' in reg, reg[:200])
+    check("the register carries the destination sheet", '"dest_sheets"' in reg and "02" not in reg, reg[:300])
+
+    # Both arrows of a pair share the signal's name, so a delete by name takes
+    # one arrow — the second goes on the next call.
+    s.run("EL_DELETE STOP")
+    check("EL_DELETE removes one arrow of the pair", s.count_on(SIGNAL_LAYER) == 3, f"{s.count_on(SIGNAL_LAYER)} left")
+    s.run("EL_DELETE STOP")
+    check("the second delete takes the other arrow", s.count_on(SIGNAL_LAYER) == 0, f"{s.count_on(SIGNAL_LAYER)} left")
+    s.close()
+
+    # ── sheet 02: pairing across sessions, through the same folder ──
+    s = session()
+    s.send({"op": "new"})
+    s.run("EL_SETTINGS SHEET=02 DRAWING=CONTROL WIREMODE=S WIRE_FORMAT=W%N WIRE_START=1")
+    s.run("EL_WIRE 20,200 90,200")
+    s.run("EL_WIRENO")
+    s.send({"op": "save", "path": "sheet02.dxf"})
+    s.run("EL_PROJECT SET SHEET=02 NAME=CONTROL")
+    s.run("EL_SIGNAL STOP DEST 20,200")
+    s.run("EL_PROJECT SYNC")
+
+    reg = read(os.path.join(WORK, "el-project.json"))
+    check("the source survives sheet 02's sync", '"source_sheet": "01"' in reg, reg[:200])
+    dests_ok = '"dest_sheets": [' in reg and '"02"' in reg
+    check("sheet 02 registers its destination", dests_ok, reg[:400])
+
+    # After the sync the destination arrow's label names the source sheet.
+    s.send({"op": "save", "path": "sheet02-labeled.dxf"})
+    txt = read(os.path.join(WORK, "sheet02-labeled.dxf")).replace("\r\n", "\n")
+    check("the dest arrow labels itself with the source sheet", "STOP ← 01" in txt, "no pairing note in the drawing")
+
+    # An arrow anchored to a wire end follows a trim of that end.
+    s.run("EL_SIGNAL STOP SOURCE 20,200")
+    s.run("EL_TRIMWIRE W1 25,200")
+    ents = s.send({"op": "query", "layer": SIGNAL_LAYER, "limit": 50}).get("entities", [])
+    xs = [v for e in ents for v in (e.get("vertices") or [])]
+    moved = any(abs(v[0] - 25.0) < 1e-6 or abs(v[0] - 19.0) < 1e-6 for v in xs)
+    check("an arrow rides the wire end it anchors to", moved and len(ents) >= 2, f"{len(ents)} entity(ies)")
     s.close()
 
 
@@ -1278,6 +1363,7 @@ def main():
     phase_ladder()
     phase_wires_and_numbering()
     phase_wire_gap_and_trim()
+    phase_signals_and_project()
     phase_failures_and_cleanup()
     phase_library()
     phase_components()

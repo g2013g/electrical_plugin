@@ -157,8 +157,15 @@ pub fn split_runs(points: &[Pt], cuts: &[Pt], gap_mm: f64) -> Vec<Vec<Pt>> {
 /// result is canonical: independent of the order the document lists the run
 /// entities in, and of which end of the wire is "from". Consumers here (the
 /// label midpoint, a re-seat that matches ends against pins) do not need a
-/// particular direction. Run interiors are concatenated with shared joints
-/// de-duplicated.
+/// particular direction.
+///
+/// Chaining a *split* wire necessarily bridges each gap with a straight
+/// pseudo-segment, and the cut points the bridging passes through are then
+/// redundant interior vertices. They are stripped (interior vertices collinear
+/// with their neighbours), because a base that keeps them is a trap: trimming
+/// a whole wire's end *past* its old cut points would make the path double
+/// back through them, and the doubled-back segment would genuinely re-cross
+/// whatever the wire used to gap against.
 pub fn fold_runs(runs: &[Vec<Pt>]) -> Vec<Pt> {
     let mut remaining: Vec<Vec<Pt>> = runs.iter().filter(|r| !r.is_empty()).cloned().collect();
     if remaining.is_empty() {
@@ -213,7 +220,32 @@ pub fn fold_runs(runs: &[Vec<Pt>]) -> Vec<Pt> {
         }
         path.extend(part);
     }
-    path
+    simplify_collinear(&path, 1e-6)
+}
+
+/// Drop interior vertices that lie on the straight line between their
+/// neighbours, until none are left. A genuine bend is never collinear, so
+/// only fold artifacts and placement noise disappear.
+pub fn simplify_collinear(points: &[Pt], tol: f64) -> Vec<Pt> {
+    if points.len() < 3 {
+        return points.to_vec();
+    }
+    let mut out: Vec<Pt> = points.to_vec();
+    loop {
+        let mut dropped = false;
+        let mut i = 1;
+        while i + 1 < out.len() {
+            if crate::geom::dist_point_to_segment(out[i], out[i - 1], out[i + 1]) <= tol {
+                out.remove(i);
+                dropped = true;
+            } else {
+                i += 1;
+            }
+        }
+        if !dropped {
+            return out;
+        }
+    }
 }
 
 /// Where wire `a` should be cut given the other wires' paths.
@@ -351,18 +383,19 @@ mod tests {
         let a = vec![[0.0, 0.0], [4.2, 0.0]];
         let b = vec![[5.8, 0.0], [10.0, 0.0]];
         let folded = fold_runs(&[b, a]);
-        assert_eq!(folded.len(), 4);
-        assert!(approx(folded[0], [0.0, 0.0]));
-        assert!(approx(folded[3], [10.0, 0.0]));
+        // The bridging cut points are fold artifacts and are stripped, so the
+        // split's fold is the clean two-point path.
+        assert_eq!(folded, vec![[0.0, 0.0], [10.0, 0.0]]);
     }
 
     #[test]
     fn fold_runs_flips_a_backwards_run() {
-        let a = vec![[0.0, 0.0], [4.2, 0.0]];
-        let b = vec![[10.0, 0.0], [5.8, 0.0]]; // drawn tail-first
+        // The second run is drawn tail-first, ending on the shared joint.
+        let a = vec![[0.0, 0.0], [4.2, 0.0], [4.2, 5.0]];
+        let b = vec![[10.0, 5.0], [4.2, 5.0]];
         let folded = fold_runs(&[a, b]);
-        assert!(approx(folded[2], [5.8, 0.0]));
-        assert!(approx(folded[3], [10.0, 0.0]));
+        // Every surviving vertex is a genuine bend; the joints are shared.
+        assert_eq!(folded, vec![[0.0, 0.0], [4.2, 0.0], [4.2, 5.0], [10.0, 5.0]]);
     }
 
     #[test]
@@ -370,6 +403,38 @@ mod tests {
         assert!(fold_runs(&[]).is_empty());
         let one = vec![vec![[1.0, 1.0], [2.0, 2.0]]];
         assert_eq!(fold_runs(&one), one[0]);
+    }
+
+    #[test]
+    fn fold_runs_strips_the_bridging_artifacts_of_a_split() {
+        // The exact trap a trimmed whole wire walks into: its folded base
+        // carries the old cut points, and a trim past them would otherwise
+        // double the path back through them.
+        let a = vec![[20.0, 200.0], [59.6, 200.0]];
+        let b = vec![[60.4, 200.0], [90.0, 200.0]];
+        assert_eq!(fold_runs(&[a, b]), vec![[20.0, 200.0], [90.0, 200.0]]);
+    }
+
+    #[test]
+    fn a_trim_past_the_old_cuts_never_recrosses_the_partner() {
+        // The whole path from the trimmed base must not contain the crossing.
+        let a = vec![[20.0, 200.0], [59.6, 200.0]];
+        let b = vec![[60.4, 200.0], [90.0, 200.0]];
+        let mut base = fold_runs(&[a, b]);
+        base[0] = [62.0, 200.0]; // the head trimmed past x=60
+        let other = vec![[60.0, 180.0], [60.0, 220.0]];
+        let cuts = cuts_for(&base, &[&other], 1e-6);
+        assert!(cuts.is_empty(), "the trimmed wire no longer crosses: {cuts:?}");
+    }
+
+    #[test]
+    fn simplify_collinear_keeps_genuine_bends() {
+        let bent = vec![[0.0, 0.0], [10.0, 0.0], [10.0, 10.0]];
+        assert_eq!(simplify_collinear(&bent, 1e-6), bent);
+        // A vertex exactly on the straight between its neighbours goes.
+        let straight = vec![[0.0, 0.0], [5.0, 0.0], [10.0, 0.0]];
+        assert_eq!(simplify_collinear(&straight, 1e-6), vec![[0.0, 0.0], [10.0, 0.0]]);
+        assert_eq!(simplify_collinear(&[[1.0, 1.0]], 1e-6), vec![[1.0, 1.0]]);
     }
 
     #[test]

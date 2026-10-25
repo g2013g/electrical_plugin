@@ -68,6 +68,8 @@ logic is testable without a CAD host and is insulated from ABI churn.
 | `EL_CABLE [tag] [x,y] [COND=] [COLOR=] [GAUGE=] [MFG=] [CAT=] [PART=] [FROM=] [TO=]` | Place a cable marker; the next free conductor is taken automatically. `LIST`, `CLEAR`. |
 | `EL_CONNECTOR [refdes] [x,y] [PINS=a,b,c \| COUNT=n] [SPACING=] [PERROW=] [ORIENT=] [WNC]` | Place a parametric connector. `EDIT <ref>` changes its pin field; `LIST`, `CLEAR`. |
 | `EL_CATALOG [LIST \| SEARCH <text> \| FAMILY <code>]` | Browse the parts catalogue. `ASSIGN <item> MFG= CAT=`, `CLEAR <item>`, `PATH`. |
+| `EL_SIGNAL <name> SOURCE\|DEST [x,y] [WIRE=<wref>]` \| LIST \| CLEAR <name\|ALL> \| SET <name> NAME= DIR= | Place a signal arrow — an off-sheet continuation marker anchored to a wire end. Arrows pair across sheets by name through the project register; after both sheets sync, a destination arrow labels itself with the source sheet. |
+| `EL_PROJECT [NEW <name> \| SET [SHEET= NAME= ADD=path] \| SYNC \| PATH]` | The cross-sheet register (`el-project.json`, beside the drawings): the drawing list with sheet numbers, and the signal register `SYNC` folds this sheet's arrows into. Bare shows it. |
 | `EL_REPORT [kind] [path.csv] [FORCE] [TABLE [x,y]] [HEIGHT=] \| ALL \| LIST` | Export a report, or draw it on the sheet. Kinds: BOM, COMPONENTS, WIREFROMTO, WIRELABELS, TERMINALS, CABLES, MISSINGCATALOG, DRAWINGLIST. |
 | `EL_AUDIT [QUIET] [CODES]` | What is wrong with this drawing, and whether it is reportable. |
 | `EL_MOVE <target> <x,y> \| DX= DY= [ROT=]` | Move a device, terminal, connector or ladder; attached wires are re-seated. |
@@ -323,15 +325,22 @@ the wire-crossing gap that Phase 1 deferred (2026-10-25):
   `el-core/src/wiregap.rs` (`split_runs`, `fold_runs`), on top of
   `geom.rs::proper_crossing`, which is what keeps a junction from ever being
   gapped.
+- **Project + signals (T2, first increment)** — `EL_PROJECT` maintains the
+  cross-sheet register `el-project.json` beside the drawings (drawing list
+  with sheet numbers, signal register); `EL_SIGNAL` places source/destination
+  arrows anchored to wire ends. After both sheets sync, a destination arrow
+  labels itself with the sheet its source lives on — without that sheet being
+  open. Arrows ride their wire end through moves, re-seats and trims, and the
+  audit rules `SIGNAL_NO_NAME` / `SIGNAL_NO_WIRE` / `DUP_SIGNAL_SOURCE` keep a
+  broken arrow from hiding. Project-wide retag and cross-drawing wire-number
+  uniqueness are the next layer on this register.
 
 The plan's phases are complete. What is deferred, named rather than forgotten:
 
 A **terminal strip editor** (ACADE's TSE, which reorders a strip and charts its
 jumpers), **panel layout** — footprints, item numbers and balloons — **PLC I/O**
-(needs a module data file), **`EL_TITLEBLOCK`** (needs a title block to write into).
-A project folder index — cross-drawing wire numbers, project-wide reports — is the
-one capability the plan deliberately left to a later version. The whole parity
-queue, in priority order, lives in
+(needs a module data file), and **`EL_TITLEBLOCK`** (needs a title block to
+write into). The whole parity queue, in priority order, lives in
 [`docs/PARITY_PLAN.md`](docs/PARITY_PLAN.md).
 
 Deferred from Phase 3, in more detail: a **terminal strip editor** (ACADE's TSE, which reorders a

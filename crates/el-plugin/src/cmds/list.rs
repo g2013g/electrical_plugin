@@ -32,6 +32,7 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
         && idx.terminals.is_empty()
         && idx.cables.is_empty()
         && idx.connectors.is_empty()
+        && idx.signals.is_empty()
         && idx.ladders.is_empty();
     if empty {
         host.push_output("EL_LIST: this drawing has no electrical objects yet");
@@ -115,6 +116,9 @@ fn summary(host: &mut dyn HostApi, idx: &ElIndex) {
         idx.cables.len()
     ));
     host.push_output(&format!("  connectors    {}", idx.connectors.len()));
+    if !idx.signals.is_empty() {
+        host.push_output(&format!("  signals       {}", idx.signals.len()));
+    }
 
     // Catalogue coverage decides whether a bill of materials can be issued.
     let assignments = drc::assignments(idx);

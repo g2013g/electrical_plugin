@@ -277,6 +277,39 @@ impl ElRecord {
         })
     }
 
+    // ── signal ───────────────────────────────────────────────────────────
+
+    pub fn encode_signal(rec: &SignalRec) -> ElRecord {
+        let mut r = ElRecord::new(KIND_SIGNAL, &rec.el_id);
+        r.put_str("NAME", &rec.name);
+        r.put_str("DIR", rec.direction.as_str());
+        r.put_real("OX", rec.origin_x);
+        r.put_real("OY", rec.origin_y);
+        r.put_str("WIRE", &rec.wire_el_id);
+        r.put_bool("TOEND", rec.at_to_end);
+        r
+    }
+
+    pub fn decode_signal(&self) -> Result<SignalRec, DecodeError> {
+        self.check_schema()?;
+        let el_id = self
+            .el_id()
+            .ok_or_else(|| DecodeError("missing ELID key".to_string()))?
+            .to_string();
+        Ok(SignalRec {
+            el_id,
+            name: self.get_str("NAME").unwrap_or("").to_string(),
+            direction: self
+                .get_str("DIR")
+                .and_then(SignalDirection::parse)
+                .unwrap_or_default(),
+            origin_x: self.get_real("OX").unwrap_or(0.0),
+            origin_y: self.get_real("OY").unwrap_or(0.0),
+            wire_el_id: self.get_str("WIRE").unwrap_or("").to_string(),
+            at_to_end: self.get_bool("TOEND").unwrap_or(false),
+        })
+    }
+
     // ── component ────────────────────────────────────────────────────────
 
     pub fn encode_component(rec: &ElComponentRec) -> ElRecord {

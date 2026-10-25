@@ -156,6 +156,24 @@ fn describe(cap: &Capture, handle: u64, record: &el_core::codec::ElRecord) -> St
     let kind = record.kind().unwrap_or("?");
     out.push_str(&format!("EL_INFO {kind} @ 0x{handle:X}"));
 
+    match record.clone().decode_signal() {
+        Ok(s) if kind == el_core::model::KIND_SIGNAL => {
+            out.push_str(&format!("\n  signal   : {}", or_dash(&s.name)));
+            out.push_str(&format!("\n  direction: {}", s.direction.as_str()));
+            out.push_str(&format!(
+                "\n  anchors  : {}",
+                match s.at_to_end {
+                    false => "from end",
+                    true => "to end",
+                }
+            ));
+            // The pairing note lives in the project register, which needs the
+            // host to find — EL_SIGNAL LIST shows it.
+            out.push_str(&format!("\n  wire id  : {}", or_dash(&s.wire_el_id)));
+        }
+        _ => {}
+    }
+
     match record.clone().decode_component() {
         Ok(c) if kind == KIND_COMPONENT => {
             out.push_str(&format!("\n  tag      : {}", or_dash(&c.tag)));

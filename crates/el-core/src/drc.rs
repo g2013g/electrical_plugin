@@ -214,6 +214,44 @@ pub fn check(idx: &ElIndex, catalog: Option<&Catalog>) -> Vec<Issue> {
         }
     }
 
+    // ── signals ──────────────────────────────────────────────────────────
+    // Drawing-local rules only: whether a signal's other half exists on
+    // another sheet is the project register's knowledge, checked by
+    // `EL_SIGNAL LIST`, not here.
+    let mut seen_sources: BTreeMap<&str, &str> = BTreeMap::new();
+    for s in idx.signals.values() {
+        let label = if s.rec.name.is_empty() {
+            format!("signal 0x{:X}", s.primary())
+        } else {
+            s.rec.name.clone()
+        };
+        if s.rec.name.is_empty() {
+            issues.push(Issue::error(
+                "SIGNAL_NO_NAME",
+                format!("{label} carries no name — it can never pair across sheets"),
+            ));
+        }
+        let wire_present = !s.rec.wire_el_id.is_empty()
+            && idx.wires.values().any(|w| w.rec.el_id == s.rec.wire_el_id);
+        if !wire_present {
+            issues.push(Issue::error(
+                "SIGNAL_NO_WIRE",
+                format!("{label} anchors to a wire that is not in this drawing"),
+            ));
+        }
+        if s.rec.direction == SignalDirection::Source && !s.rec.name.is_empty() {
+            if seen_sources
+                .insert(s.rec.name.as_str(), s.rec.el_id.as_str())
+                .is_some()
+            {
+                issues.push(Issue::error(
+                    "DUP_SIGNAL_SOURCE",
+                    format!("signal {label} has more than one source arrow in this drawing"),
+                ));
+            }
+        }
+    }
+
     // ── terminals ────────────────────────────────────────────────────────
     check_terminals(idx, &mut issues);
 
