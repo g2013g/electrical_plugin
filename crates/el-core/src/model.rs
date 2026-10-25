@@ -38,6 +38,7 @@ pub const KIND_CONNECTOR: &str = "connector";
 pub const KIND_SIGNAL: &str = "signal";
 pub const KIND_JUMPER: &str = "jumper";
 pub const KIND_STRIPPLOT: &str = "stripplot";
+pub const KIND_FOOTPRINT: &str = "footprint";
 pub const KIND_XREF: &str = "xref";
 
 // ── drawing layers ───────────────────────────────────────────────────────
@@ -55,6 +56,8 @@ pub const LAYER_TERMINALS: &str = "EL_TERMINALS";
 pub const LAYER_CABLES: &str = "EL_CABLES";
 pub const LAYER_SIGNALS: &str = "EL_SIGNALS";
 pub const LAYER_STRIPS: &str = "EL_STRIPS";
+pub const LAYER_PANEL: &str = "EL_PANEL";
+pub const LAYER_BALLOONS: &str = "EL_BALLOONS";
 pub const LAYER_TABLE: &str = "EL_TABLE";
 
 /// Text height for reference-designator labels, mm.
@@ -382,6 +385,78 @@ impl TerminalRec {
             return self.tag_strip.clone();
         }
         format!("{}:{}", self.tag_strip, self.number)
+    }
+}
+
+
+// ── footprint record ─────────────────────────────────────────────────────
+
+/// One panel-layout footprint: the physical outline of a device on the panel,
+/// linked to its schematic component **by tag**.
+///
+/// The link is the whole point of ACADE's panel drawings (CH8): the footprint
+/// is placed from the schematic list, carries the device's catalog data, and
+/// gets an **item number** that the panel BOM and the balloons key off. A
+/// footprint whose tag matches no schematic component still places (a panel
+/// may hold items the schematic omits) — the audit reports it as a warning,
+/// never an error.
+#[derive(Debug, Clone, PartialEq)]
+pub struct FootprintRec {
+    pub el_id: String,
+    /// The schematic device's tag (`K1`); the bi-directional link.
+    pub tag: String,
+    pub origin_x: f64,
+    pub origin_y: f64,
+    /// Body size in mm. Defaults come from the family when not stated.
+    pub width_mm: f64,
+    pub height_mm: f64,
+    /// The BOM item number; `0` means "not numbered yet".
+    pub item_number: i32,
+    pub description: String,
+    pub mfg: String,
+    pub cat: String,
+    /// A balloon is drawn for this footprint. The balloon itself is a pure
+    /// render (rebuilt from the record), so this flag — not any drawn entity
+    /// — is the truth about whether one exists.
+    pub ballooned: bool,
+}
+
+impl FootprintRec {
+    pub fn new(el_id: &str, tag: &str) -> Self {
+        let (w, h) = family_footprint_mm(&family_of(tag));
+        FootprintRec {
+            el_id: el_id.to_string(),
+            tag: tag.to_string(),
+            origin_x: 0.0,
+            origin_y: 0.0,
+            width_mm: w,
+            height_mm: h,
+            item_number: 0,
+            description: String::new(),
+            mfg: String::new(),
+            cat: String::new(),
+            ballooned: false,
+        }
+    }
+}
+
+/// Default panel body size per family — the stand-in for ACADE's footprint
+/// lookup table, sized from typical DIN-rail hardware. Unknown families get a
+/// generic slot.
+pub fn family_footprint_mm(family: &str) -> (f64, f64) {
+    match family.to_ascii_uppercase().as_str() {
+        "K" => (35.0, 75.0),        // relay / contactor on a DIN rail
+        "Q" => (45.0, 90.0),        // breaker
+        "F" => (18.0, 80.0),        // fuse holder / overload
+        "M" => (90.0, 90.0),        // motor body
+        "G" => (60.0, 60.0),        // supply / battery
+        "T" => (75.0, 90.0),        // transformer
+        "X" => (18.0, 120.0),       // terminal block row
+        "S" => (22.0, 22.0),        // pushbutton hole
+        "H" => (22.0, 22.0),        // pilot lamp hole
+        "R" | "C" | "V" => (18.0, 45.0),
+        "B" => (30.0, 45.0),        // sensor / amplifier
+        _ => (40.0, 40.0),
     }
 }
 

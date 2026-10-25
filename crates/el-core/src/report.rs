@@ -33,6 +33,7 @@ pub enum ReportKind {
     WireLabels,
     /// Terminals by strip.
     TerminalPlan,
+    PanelBom,
     /// Cables and their conductors.
     CableSummary,
     /// Devices that cannot be ordered as drawn.
@@ -46,12 +47,13 @@ pub enum ReportKind {
 }
 
 impl ReportKind {
-    pub const ALL: [ReportKind; 9] = [
+    pub const ALL: [ReportKind; 10] = [
         ReportKind::Bom,
         ReportKind::Components,
         ReportKind::WireFromTo,
         ReportKind::WireLabels,
         ReportKind::TerminalPlan,
+        ReportKind::PanelBom,
         ReportKind::CableSummary,
         ReportKind::MissingCatalog,
         ReportKind::DrawingList,
@@ -64,6 +66,7 @@ impl ReportKind {
             ReportKind::Components => "COMPONENTS",
             ReportKind::WireFromTo => "WIREFROMTO",
             ReportKind::TerminalPlan => "TERMINALS",
+            ReportKind::PanelBom => "PANELBOM",
             ReportKind::CableSummary => "CABLES",
             ReportKind::MissingCatalog => "MISSINGCATALOG",
             ReportKind::WireLabels => "WIRELABELS",
@@ -79,6 +82,7 @@ impl ReportKind {
             "WIREFROMTO" | "FROMTO" | "WIRES" | "CONNECTIONS" => Some(ReportKind::WireFromTo),
             "WIRELABELS" | "LABELS" => Some(ReportKind::WireLabels),
             "TERMINALS" | "TERMINALPLAN" | "TERMINAL" => Some(ReportKind::TerminalPlan),
+            "PANELBOM" | "PANEL" | "PANELLIST" => Some(ReportKind::PanelBom),
             "CABLES" | "CABLESUMMARY" | "CABLE" => Some(ReportKind::CableSummary),
             "MISSINGCATALOG" | "MISSING" | "NOCATALOG" => Some(ReportKind::MissingCatalog),
             "DRAWINGLIST" | "DRAWINGS" | "SHEETS" => Some(ReportKind::DrawingList),
@@ -94,6 +98,7 @@ impl ReportKind {
             ReportKind::Components => "Component list",
             ReportKind::WireFromTo => "Wire from/to",
             ReportKind::TerminalPlan => "Terminal plan",
+            ReportKind::PanelBom => "Panel BOM",
             ReportKind::CableSummary => "Cable summary",
             ReportKind::MissingCatalog => "Missing catalogue data",
             ReportKind::WireLabels => "Wire labels",
@@ -109,6 +114,7 @@ impl ReportKind {
             ReportKind::Components => "components",
             ReportKind::WireFromTo => "wire-from-to",
             ReportKind::TerminalPlan => "terminal-plan",
+            ReportKind::PanelBom => "panel-bom",
             ReportKind::CableSummary => "cable-summary",
             ReportKind::MissingCatalog => "missing-catalog",
             ReportKind::WireLabels => "wire-labels",
@@ -131,6 +137,7 @@ pub fn build(
         ReportKind::WireFromTo => wire_from_to(idx),
         ReportKind::WireLabels => wire_labels(idx),
         ReportKind::TerminalPlan => terminal_plan(idx),
+        ReportKind::PanelBom => panel_bom(idx),
         ReportKind::CableSummary => cable_summary(idx),
         ReportKind::MissingCatalog => missing_catalog(idx, catalog),
         ReportKind::DrawingList => drawing_list(idx, settings),
@@ -375,6 +382,58 @@ pub fn terminal_plan(idx: &ElIndex) -> TableLayout {
         &["STRIP", "NO", "TYPE", "PART", "DESCRIPTION", "LINKED", "PTN", "JUMPERED TO"],
         rows,
     )
+}
+
+
+/// Panel BOM (CH8): one row per footprint, keyed by item number — the list a
+/// panel builder assembles from, carrying the schematic's catalog data over
+/// the tag link when the footprint does not override it.
+pub fn panel_bom(idx: &ElIndex) -> TableLayout {
+    let mut rows: Vec<Vec<String>> = Vec::new();
+    let mut fps: Vec<&crate::index::IndexedFootprint> = idx.footprints.values().collect();
+    // Item-number order when numbered, placement order otherwise, so the
+    // sheet's balloons and the BOM read the same sequence.
+    fps.sort_by(|a, b| {
+        a.rec
+            .item_number
+            .cmp(&b.rec.item_number)
+            .then_with(|| crate::refdes_cmp(&a.rec.tag, &b.rec.tag))
+    });
+    for f in fps {
+        // The schematic link fills the blanks: catalog lives on the device.
+        let (mfg, cat, desc) = match idx.parent_by_tag(&f.rec.tag) {
+            Some(c) => (
+                if f.rec.mfg.is_empty() { c.rec.mfg.clone() } else { f.rec.mfg.clone() },
+                if f.rec.cat.is_empty() { c.rec.cat.clone() } else { f.rec.cat.clone() },
+                if f.rec.description.is_empty() { c.rec.description.clone() } else { f.rec.description.clone() },
+            ),
+            None => (f.rec.mfg.clone(), f.rec.cat.clone(), f.rec.description.clone()),
+        };
+        rows.push(vec![
+            match f.rec.item_number {
+                n if n > 0 => n.to_string(),
+                _ => EMPTY_CELL.to_string(),
+            },
+            f.rec.tag.clone(),
+            format!("{}x{}", fmt_size(f.rec.width_mm), fmt_size(f.rec.height_mm)),
+            dash(&desc),
+            dash(&mfg),
+            dash(&cat),
+        ]);
+    }
+    TableLayout::new(
+        &format!("Panel BOM — {} item(s)", rows.len()),
+        &["ITEM", "TAG", "SIZE", "DESCRIPTION", "MFG", "CAT"],
+        rows,
+    )
+}
+
+fn fmt_size(v: f64) -> String {
+    if v.fract() == 0.0 {
+        format!("{}", v as i64)
+    } else {
+        format!("{v:.1}")
+    }
 }
 
 /// Cable summary: one row per cable, with its conductor count.

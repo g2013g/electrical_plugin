@@ -189,6 +189,11 @@ fn resolve(
             handles.extend(capture.index.handles_for_el_id(&child.rec.el_id));
             kids += 1;
         }
+        // The panel footprint linked to this tag goes with the device — a
+        // body with no device is exactly the audit's dangling case.
+        if let Some(f) = capture.index.footprint_by_tag(token) {
+            handles.extend(capture.index.handles_for_el_id(&f.rec.el_id));
+        }
         let label = if kids == 0 {
             parent.rec.tag.clone()
         } else {
@@ -248,6 +253,10 @@ fn resolve_handle(
             handles.extend(capture.index.handles_for_el_id(&j.rec.el_id).iter().copied());
         }
         return Ok((t.rec.designator(), handles, "terminal"));
+    }
+    if let Some(f) = capture.index.footprint_of_handle(handle) {
+        let handles = capture.index.handles_for_el_id(&f.rec.el_id).to_vec();
+        return Ok((format!("footprint {}", f.rec.tag), handles, "footprint"));
     }
     if let Some(j) = capture.index.jumper_of_handle(handle) {
         let handles = capture.index.handles_for_el_id(&j.rec.el_id).to_vec();

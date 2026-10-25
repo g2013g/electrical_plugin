@@ -252,6 +252,49 @@ pub fn check(idx: &ElIndex, catalog: Option<&Catalog>) -> Vec<Issue> {
         }
     }
 
+    // ── panel footprints ──────────────────────────────────────────────────
+    {
+        let mut seen_tags: BTreeMap<String, String> = BTreeMap::new();
+        let mut seen_items: BTreeMap<i32, String> = BTreeMap::new();
+        for f in idx.footprints.values() {
+            let label = format!("footprint {}", f.rec.tag);
+            if f.rec.tag.is_empty() {
+                issues.push(Issue::error(
+                    "FOOTPRINT_NO_TAG",
+                    "a footprint carries no tag — it can never link to a schematic device",
+                ));
+                continue;
+            }
+            if seen_tags.insert(f.rec.tag.to_ascii_uppercase(), f.rec.el_id.clone()).is_some() {
+                issues.push(Issue::error(
+                    "FOOTPRINT_DUP_TAG",
+                    format!("more than one footprint is tagged {} — a panel holds one body per device", f.rec.tag),
+                ));
+            }
+            // A footprint whose tag matches no schematic component is legal
+            // (the panel may hold items the schematic omits) but worth saying.
+            if idx.parent_by_tag(&f.rec.tag).is_none()
+                && idx.component_by_tag(&f.rec.tag).is_none()
+            {
+                issues.push(Issue::warning(
+                    "FOOTPRINT_NO_SCHEMATIC",
+                    format!("{label} matches no schematic component in this drawing"),
+                ));
+            }
+            if f.rec.item_number <= 0 {
+                issues.push(Issue::warning(
+                    "FOOTPRINT_NO_ITEM",
+                    format!("{label} has no item number — run EL_PANEL NUMBER"),
+                ));
+            } else if seen_items.insert(f.rec.item_number, f.rec.el_id.clone()).is_some() {
+                issues.push(Issue::error(
+                    "FOOTPRINT_DUP_ITEM",
+                    format!("item number {} is carried by more than one footprint", f.rec.item_number),
+                ));
+            }
+        }
+    }
+
     // ── terminals ────────────────────────────────────────────────────────
     check_terminals(idx, &mut issues);
 

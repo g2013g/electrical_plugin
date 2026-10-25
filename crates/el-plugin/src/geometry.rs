@@ -1012,3 +1012,105 @@ mod tests {
         assert_eq!(m.style, "Standard");
     }
 }
+
+// ── panel footprints ─────────────────────────────────────────────────────
+
+/// Build a panel footprint: the body outline, its tag above, its item number
+/// in a corner (the balloon carries the big one). Every part carries the
+/// record, so the footprint is one object to pick, move and delete.
+pub fn footprint_entities(
+    record: &ElRecord,
+    rec: &el_core::model::FootprintRec,
+) -> Vec<EntityType> {
+    use el_core::model::LAYER_PANEL;
+    let (x, y) = (rec.origin_x, rec.origin_y);
+    let (w, h) = (rec.width_mm, rec.height_mm);
+    let mut parts: Vec<EntityType> = Vec::new();
+
+    let body = LwPolyline::from_points(vec![
+        Vector2::new(x, y),
+        Vector2::new(x + w, y),
+        Vector2::new(x + w, y + h),
+        Vector2::new(x, y + h),
+    ]);
+    let mut body = body;
+    body.is_closed = true;
+    body.common.layer = LAYER_PANEL.to_string();
+    attach(record, &mut body.common);
+    parts.push(EntityType::LwPolyline(body));
+
+    // The tag, centred inside the top of the body.
+    let mut tag = label(&rec.tag, [x + w / 2.0, y + h - 2.2, 0.0], 2.4, LAYER_PANEL);
+    tag.attachment_point = AttachmentPoint::TopCenter;
+    let mut e = EntityType::MText(Box::new(tag));
+    attach(record, e.common_mut());
+    parts.push(e);
+
+    // The catalog pair, small, bottom-left — the panel builder's order code.
+    if !rec.cat.is_empty() || !rec.mfg.is_empty() {
+        let text = format!("{} {}", rec.mfg, rec.cat).trim().to_string();
+        let mut m = label(&text, [x + 1.2, y + 1.0, 0.0], 1.6, LAYER_PANEL);
+        m.attachment_point = AttachmentPoint::BottomLeft;
+        let mut e = EntityType::MText(Box::new(m));
+        attach(record, e.common_mut());
+        parts.push(e);
+    }
+    parts
+}
+
+/// Build a balloon for one footprint: a circle with the item number, a leader
+/// from the circle to the footprint body. Placed at `at`; the leader lands on
+/// the nearest body corner.
+pub fn balloon_entities(
+    record: &ElRecord,
+    rec: &el_core::model::FootprintRec,
+    at: [f64; 3],
+) -> Vec<EntityType> {
+    use el_core::model::LAYER_BALLOONS;
+    const R: f64 = 4.0;
+    let mut parts: Vec<EntityType> = Vec::new();
+
+    let mut c = Circle::from_center_radius(Vector3::new(at[0], at[1], at[2]), R);
+    c.common.layer = LAYER_BALLOONS.to_string();
+    attach(record, &mut c.common);
+    parts.push(EntityType::Circle(c));
+
+    let item = match rec.item_number {
+        n if n > 0 => n.to_string(),
+        _ => "?".to_string(),
+    };
+    let mut t = label(&item, [at[0], at[1] - 1.0, at[2]], 3.0, LAYER_BALLOONS);
+    t.attachment_point = AttachmentPoint::MiddleCenter;
+    let mut e = EntityType::MText(Box::new(t));
+    attach(record, e.common_mut());
+    parts.push(e);
+
+    // The leader aims at the nearest corner of the body.
+    let corners = [
+        [rec.origin_x, rec.origin_y],
+        [rec.origin_x + rec.width_mm, rec.origin_y],
+        [rec.origin_x, rec.origin_y + rec.height_mm],
+        [rec.origin_x + rec.width_mm, rec.origin_y + rec.height_mm],
+    ];
+    let mut best = corners[0];
+    let mut best_d = f64::INFINITY;
+    for c in corners {
+        let d = (c[0] - at[0]) * (c[0] - at[0]) + (c[1] - at[1]) * (c[1] - at[1]);
+        if d < best_d {
+            best_d = d;
+            best = c;
+        }
+    }
+    let dx = best[0] - at[0];
+    let dy = best[1] - at[1];
+    let len = (dx * dx + dy * dy).sqrt().max(1e-9);
+    let edge = [
+        at[0] + dx / len * R,
+        at[1] + dy / len * R,
+    ];
+    let mut l = Line::from_coords(edge[0], edge[1], at[2], best[0], best[1], at[2]);
+    l.common.layer = LAYER_BALLOONS.to_string();
+    attach(record, &mut l.common);
+    parts.push(EntityType::Line(l));
+    parts
+}

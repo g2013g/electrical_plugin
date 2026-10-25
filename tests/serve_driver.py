@@ -52,6 +52,8 @@ XREF_LAYER = "EL_XREF"
 TERMINAL_LAYER = "EL_TERMINALS"
 CABLE_LAYER = "EL_CABLES"
 SIGNAL_LAYER = "EL_SIGNALS"
+PANEL_LAYER = "EL_PANEL"
+BALLOON_LAYER = "EL_BALLOONS"
 STRIPS_LAYER = "EL_STRIPS"
 TABLE_LAYER = "EL_TABLE"
 HILITE_LAYER = "EL_HILITE"
@@ -755,6 +757,57 @@ def phase_strip_editor():
 
     s.run("EL_STRIP CLEAR X1")
     check("EL_STRIP CLEAR removes the diagram", s.count_on(STRIPS_LAYER) == 0, f"{s.count_on(STRIPS_LAYER)} left")
+    s.close()
+
+
+
+def phase_panel_layout():
+    print("\n-- panel layout: footprints, items, balloons, BOM --")
+    s = session()
+    s.send({"op": "new"})
+    s.run("EL_SETTINGS TAG_FORMAT=%F%N")
+    # The schematic: devices to lay out, one device left off the panel.
+    s.run("EL_COMPONENT K K1 60,220")
+    s.run("EL_COMPONENT Q Q1 120,220")
+    s.run("EL_COMPONENT F F1 60,180")
+
+    s.run("EL_PANEL K1 40,60")
+    fp = s.count_on(PANEL_LAYER)
+    check("a footprint draws on EL_PANEL", fp >= 2, f"{fp} on {PANEL_LAYER}")
+    s.run("EL_PANEL Q1 140,60")
+    s.run("EL_PANEL SOMEBIGBOX 240,60 W=80 H=50")
+    n_before = s.count_on(PANEL_LAYER)
+    check("an unlinked footprint still places", n_before >= 6, f"{n_before} on {PANEL_LAYER}")
+
+    # Item numbers: sequential by placement, renumbered by reading order.
+    s.run("EL_PANEL NUMBER")
+    s.run("EL_REPORT PANELBOM pb.csv FORCE")
+    bom = read(os.path.join(WORK, "pb.csv")).replace("\r\n", "\n")
+    check("the panel BOM lists every footprint", "K1" in bom and "Q1" in bom and "SOMEBIGBOX" in bom, bom[:300])
+    first_data = [l for l in bom.splitlines() if l and not l.startswith("#") and not l.startswith("ITEM")]
+    check("the panel BOM carries item numbers", "ITEM" in bom and any(l.startswith("1,") for l in first_data), bom[:200])
+
+    # The audit: an unlinked footprint warns, never errors.
+    # A warning-class finding never blocks: the audit stays ok with an
+    # unlinked footprint on the sheet (the warning itself is output-only,
+    # which serve does not surface).
+    r = s.run("EL_AUDIT")
+    check("an unlinked footprint does not block the audit", r.get("ok") is True)
+
+    # Balloons: pure render, ALL balloons the set, NUMBER refreshes them.
+    s.run("EL_BALLOON ALL")
+    balloons = s.count_on(BALLOON_LAYER)
+    check("balloons draw for every ballooned footprint", balloons >= 6, f"{balloons} on {BALLOON_LAYER}")
+    s.run("EL_PANEL NUMBER START=10")
+    check("renumbering refreshes the balloons", s.count_on(BALLOON_LAYER) == balloons, f"{balloons} balloons")
+    s.run("EL_BALLOON CLEAR")
+    check("balloons clear", s.count_on(BALLOON_LAYER) == 0)
+
+    # Deleting the schematic device takes its footprint along.
+    before = s.count_on(PANEL_LAYER)
+    s.run("EL_DELETE K1")
+    after = s.count_on(PANEL_LAYER)
+    check("deleting a device removes its footprint", after < before, f"{before} -> {after}")
     s.close()
 
 
@@ -1488,6 +1541,7 @@ def main():
     phase_signals_and_project()
     phase_terminal_jumpers()
     phase_strip_editor()
+    phase_panel_layout()
     phase_failures_and_cleanup()
     phase_library()
     phase_components()

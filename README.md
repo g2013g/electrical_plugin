@@ -65,6 +65,11 @@ logic is testable without a CAD host and is insulated from ABI churn.
 | `EL_RETAG [ALL \| <family>] [START=n] [DRYRUN]` | Renumber device tags. `FIX`/`UNFIX <tag>` pins one. |
 | `EL_LIB [LIST \| SHOW <name> \| FAMILIES \| PATH [LOCAL\|GLOBAL\|<file>] \| EXPORT \| RELOAD]` | Inspect and switch the symbol library. |
 | `EL_TERMINAL [kind] [strip] [x,y] [NO=] [PART=] [DESC=] [LINK=]` | Place a terminal block. Kinds: screw, spring, ground, fused, disconnect, multi, test. `NUMBER` renumbers every strip; `REORDER <strip> <no…>` renumbers in a stated order (jumpers remap with their terminals); `PARTITION <d> <name\|CLEAR>` puts a terminal in a partition group; `JUMPER <a> <b>` bridges two terminals of a strip into one circuit (nets merge across it; `JUMPER CLEAR <a>`, `JUMPER LIST`); `LIST`, `CLEAR`. |
+| `EL_PANEL <tag> [x,y] [W= H= ITEM= DESC= MFG= CAT=] \| NUMBER [START=n] \| LIST \| CLEAR <tag\|ALL>` | Place a panel-layout **footprint** for a schematic tag (default body size from the family; re-placing moves/resizes and keeps the item number). `NUMBER` renumbers items in reading order; the audit warns when a footprint has no schematic partner and errors on duplicate tags/item numbers. |
+| `EL_BALLOON <tag\|ALL> \| CLEAR` | Balloon footprints: a circled item number with a leader to the body — a pure render of the footprint records, so renumbering and re-placing keep every balloon correct. |
+| `EL_REPORT … PANELBOM` | Panel BOM (item, tag, size, description, catalog — the catalog carried over the schematic tag link). |
+| `EL_PANEL <tag> [x,y] [W= H= ITEM= DESC= MFG= CAT=] \| NUMBER [START=n] \| LIST \| CLEAR <tag\|ALL>` | Place a panel-layout **footprint** for a schematic tag (default body size from the family; re-placing moves/resizes and keeps the item number). `NUMBER` renumbers items in reading order; the audit warns when a footprint has no schematic partner and errors on duplicate tags/item numbers. |
+| `EL_BALLOON <tag\|ALL> \| CLEAR` | Balloon footprints: a circled item number with a leader to the body — a pure render of the footprint records, so renumbering and re-placing keep every balloon correct. |
 | `EL_STRIP [<strip>] [x,y] \| CLEAR [<strip>\|ALL] \| LIST` | Draw the strip diagram: one box per terminal with its number inside, wires above, partition below, jumper bridges arcing between bridged cells, doubled lines at partition boundaries. One plot per strip — redrawing replaces. |
 | `EL_CABLE [tag] [x,y] [COND=] [COLOR=] [GAUGE=] [MFG=] [CAT=] [PART=] [FROM=] [TO=]` | Place a cable marker; the next free conductor is taken automatically. `LIST`, `CLEAR`. |
 | `EL_CONNECTOR [refdes] [x,y] [PINS=a,b,c \| COUNT=n] [SPACING=] [PERROW=] [ORIENT=] [WNC]` | Place a parametric connector. `EDIT <ref>` changes its pin field; `LIST`, `CLEAR`. |
@@ -364,10 +369,10 @@ stated order with jumpers remapping; `PARTITION` groups a strip and marks the
 boundaries; `EL_STRIP` draws the diagram — boxes, wires, jumper arcs, partition
 dividers — one plot per strip, replaced on redraw. The audit refuses dangling
 or cross-strip bridges. Still missing from full TSE parity: multi-tier
-**graphical terminal diagrams** (per-terminal both-sides drawings). Also:
-**panel layout** — footprints, item numbers and balloons — **PLC I/O**
-(needs a module data file), and **`EL_TITLEBLOCK`** (needs a title block to
-write into). The whole parity queue, in priority order, lives in
+**graphical terminal diagrams** (per-terminal both-sides drawings). **panel layout** is now in (footprints by schematic tag, item numbers,
+balloons, panel BOM — CH8's core); remaining niceties: nameplates, DIN rail,
+per-vendor footprint lookup. Also: **PLC I/O** (needs a module data file),
+and **`EL_TITLEBLOCK`** (needs a title block to write into). The whole parity queue, in priority order, lives in
 [`docs/PARITY_PLAN.md`](docs/PARITY_PLAN.md).
 
 Deferred from Phase 3, in more detail: a **terminal strip editor** (ACADE's TSE, which reorders a

@@ -120,6 +120,20 @@ impl IndexedJumper {
     }
 }
 
+/// One panel footprint, folded like everything else.
+#[derive(Debug, Clone, PartialEq)]
+pub struct IndexedFootprint {
+    pub el_id: String,
+    pub rec: FootprintRec,
+    pub handles: Vec<u64>,
+}
+
+impl IndexedFootprint {
+    pub fn primary(&self) -> u64 {
+        self.handles.first().copied().unwrap_or(0)
+    }
+}
+
 /// One drawn strip diagram — folded like everything else, one plot per strip.
 #[derive(Debug, Clone, PartialEq)]
 pub struct IndexedStripPlot {
@@ -181,6 +195,8 @@ pub struct ElIndex {
     pub jumpers: BTreeMap<String, IndexedJumper>,
     /// Drawn strip diagrams by `el_id`.
     pub strip_plots: BTreeMap<String, IndexedStripPlot>,
+    /// Panel footprints by `el_id`.
+    pub footprints: BTreeMap<String, IndexedFootprint>,
 
     /// Handles whose record failed to decode, with the reason. Surfaced as an
     /// audit finding rather than swallowed: a corrupt record is a real defect.
@@ -200,6 +216,7 @@ pub struct ElIndex {
     handle_to_signal: BTreeMap<u64, String>,
     handle_to_jumper: BTreeMap<u64, String>,
     handle_to_strip_plot: BTreeMap<u64, String>,
+    handle_to_footprint: BTreeMap<u64, String>,
     cable_parent_by_tag: BTreeMap<String, String>,
     wire_by_ref: BTreeMap<String, u64>,
     /// Which wire each drawn run belongs to. A gapped wire is several polyline
@@ -390,6 +407,22 @@ impl ElIndex {
                             .or_insert_with(|| IndexedStripPlot {
                                 el_id: sp.el_id.clone(),
                                 rec: sp,
+                                handles: Vec::new(),
+                            })
+                            .handles
+                            .push(handle);
+                    }
+                    Err(e) => idx.decode_errors.push((handle, e)),
+                },
+                KIND_FOOTPRINT => match rec.decode_footprint() {
+                    Ok(f) => {
+                        idx.el_id_to_handles.entry(f.el_id.clone()).or_default().push(handle);
+                        idx.handle_to_footprint.insert(handle, f.el_id.clone());
+                        idx.footprints
+                            .entry(f.el_id.clone())
+                            .or_insert_with(|| IndexedFootprint {
+                                el_id: f.el_id.clone(),
+                                rec: f,
                                 handles: Vec::new(),
                             })
                             .handles
@@ -598,6 +631,20 @@ impl ElIndex {
         self.handle_to_jumper
             .get(&handle)
             .and_then(|id| self.jumpers.get(id))
+    }
+
+    /// The footprint a drawn part belongs to.
+    pub fn footprint_of_handle(&self, handle: u64) -> Option<&IndexedFootprint> {
+        self.handle_to_footprint
+            .get(&handle)
+            .and_then(|id| self.footprints.get(id))
+    }
+
+    /// The footprint carrying `tag`, if the panel holds one.
+    pub fn footprint_by_tag(&self, tag: &str) -> Option<&IndexedFootprint> {
+        self.footprints
+            .values()
+            .find(|f| f.rec.tag.eq_ignore_ascii_case(tag))
     }
 
     /// The strip diagram a drawn part belongs to.

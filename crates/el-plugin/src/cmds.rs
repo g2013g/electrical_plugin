@@ -16,6 +16,7 @@ pub mod library_cmd;
 pub mod link;
 pub mod list;
 pub mod move_cmd;
+pub mod panel;
 pub mod project;
 pub mod report_cmd;
 pub mod retag;

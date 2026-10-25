@@ -358,6 +358,42 @@ impl ElRecord {
         })
     }
 
+    // ── footprint ─────────────────────────────────────────────────────────
+
+    pub fn encode_footprint(rec: &FootprintRec) -> ElRecord {
+        let mut r = ElRecord::new(KIND_FOOTPRINT, &rec.el_id);
+        r.put_str("TAG", &rec.tag);
+        r.put_real("OX", rec.origin_x);
+        r.put_real("OY", rec.origin_y);
+        r.put_real("W", rec.width_mm);
+        r.put_real("H", rec.height_mm);
+        r.put_int("ITEM", rec.item_number);
+        r.put_str("DESC", &rec.description);
+        r.put_str("MFG", &rec.mfg);
+        r.put_str("CAT", &rec.cat);
+        r.put_bool("BLN", rec.ballooned);
+        r
+    }
+
+    pub fn decode_footprint(&self) -> Result<FootprintRec, DecodeError> {
+        self.check_schema()?;
+        let el_id = self
+            .el_id()
+            .ok_or_else(|| DecodeError("missing ELID key".to_string()))?
+            .to_string();
+        let mut rec = FootprintRec::new(&el_id, self.get_str("TAG").unwrap_or(""));
+        rec.origin_x = self.get_real("OX").unwrap_or(0.0);
+        rec.origin_y = self.get_real("OY").unwrap_or(0.0);
+        rec.width_mm = self.get_real("W").unwrap_or(rec.width_mm);
+        rec.height_mm = self.get_real("H").unwrap_or(rec.height_mm);
+        rec.item_number = self.get_int("ITEM").unwrap_or(0);
+        rec.description = self.get_str("DESC").unwrap_or("").to_string();
+        rec.mfg = self.get_str("MFG").unwrap_or("").to_string();
+        rec.cat = self.get_str("CAT").unwrap_or("").to_string();
+        rec.ballooned = self.get_bool("BLN").unwrap_or(false);
+        Ok(rec)
+    }
+
     // ── component ────────────────────────────────────────────────────────
 
     pub fn encode_component(rec: &ElComponentRec) -> ElRecord {

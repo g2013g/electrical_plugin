@@ -33,6 +33,7 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
         && idx.cables.is_empty()
         && idx.connectors.is_empty()
         && idx.signals.is_empty()
+        && idx.footprints.is_empty()
         && idx.ladders.is_empty();
     if empty {
         host.push_output("EL_LIST: this drawing has no electrical objects yet");
@@ -118,6 +119,14 @@ fn summary(host: &mut dyn HostApi, idx: &ElIndex) {
     host.push_output(&format!("  connectors    {}", idx.connectors.len()));
     if !idx.signals.is_empty() {
         host.push_output(&format!("  signals       {}", idx.signals.len()));
+    }
+    if !idx.footprints.is_empty() {
+        let ballooned = idx.footprints.values().filter(|f| f.rec.ballooned).count();
+        host.push_output(&format!(
+            "  panel         {} footprint(s) ({} ballooned)",
+            idx.footprints.len(),
+            ballooned
+        ));
     }
 
     // Catalogue coverage decides whether a bill of materials can be issued.
