@@ -111,9 +111,7 @@ fn pin(host: &mut dyn HostApi, a: &mut Args, fixed: bool) {
 
 /// Compute and apply numbers. `only` restricts the run to one wire.
 fn renumber(host: &mut dyn HostApi, only: Option<String>) {
-    let _ = std::fs::write("wn-1-index", "1");
     let idx = build_index(host.document());
-    let _ = std::fs::write("wn-2-index-built", "1");
     let settings = idx.settings_or_default();
 
     if idx.wires.is_empty() {
@@ -124,7 +122,6 @@ fn renumber(host: &mut dyn HostApi, only: Option<String>) {
     // What only the drawing knows: where each wire is, and which rung it is on.
     let mut inputs: Vec<WireNumberInput> = Vec::new();
 
-    let _ = std::fs::write("wn-3-loop-start", "1");
     for (handle, wire) in &idx.wires {
         if let Some(ref want) = only {
             let matches = wire.rec.wire_ref.eq_ignore_ascii_case(want)
@@ -135,7 +132,6 @@ fn renumber(host: &mut dyn HostApi, only: Option<String>) {
             }
         }
 
-        let _ = std::fs::write("wn-4-pre-midpoint", "1");
         let Some(mid) = wire_midpoint_of(host, &idx, *handle) else {
             // No drawn geometry: nothing can be numbered or labelled, and
             // guessing a position would put a label in the wrong place.
@@ -146,7 +142,6 @@ fn renumber(host: &mut dyn HostApi, only: Option<String>) {
             continue;
         };
 
-        let _ = std::fs::write("wn-5-post-midpoint", "1");
         let type_name = if wire.rec.wire_type.is_empty() {
             idx.wire_layer_for("")
         } else {

@@ -4,3 +4,6 @@
 *.pdb
 *.lib
 *.exp
+
+# serve-driver scratch artifacts
+/wn-*
