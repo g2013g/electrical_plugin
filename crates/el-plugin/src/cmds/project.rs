@@ -264,7 +264,7 @@ fn set(host: &mut dyn HostApi, idx: &el_core::ElIndex, a: &Args, existing: Optio
     };
     // Registering another drawing is ADD=<path> with its own SHEET=/NAME=;
     // without ADD= the keys describe *this* drawing, taken from its settings.
-    let mut drawing = match a.get("ADD") {
+    let drawing = match a.get("ADD") {
         Some(path) => ProjectDrawing {
             sheet: a.get("SHEET").unwrap_or("").to_string(),
             name: a.get("NAME").unwrap_or("").to_string(),

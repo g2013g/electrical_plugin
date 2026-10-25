@@ -637,7 +637,7 @@ fn reorder(host: &mut dyn HostApi, a: &Args) {
     }
 
     // The strip's terminals, in drawn order, matched against the stated one.
-    let mut terminals: Vec<&el_core::index::IndexedTerminal> = idx
+    let terminals: Vec<&el_core::index::IndexedTerminal> = idx
         .terminals
         .values()
         .filter(|t| t.rec.tag_strip.eq_ignore_ascii_case(&strip))

@@ -11,7 +11,6 @@ use ocs_plugin_api::host::codec::EntityType;
 use ocs_plugin_api::host::HostApi;
 use ocs_plugin_api::host::PluginRequestSender;
 use ocs_plugin_api::ipc::protocol::PluginRequest;
-use ocs_plugin_api::ipc::protocol::PluginResponse;
 
 
 /// The entity most recently inspected or named, so `@SEL` in a later command
@@ -95,28 +94,21 @@ pub fn push_deferred(line: PendingLine) {
     }
 }
 
-/// Publish one line right now: through the request sender when we have one
-/// (works from an interactive callback), otherwise into the queue.
+/// Publish one line: always into the queue, printed by the next dispatch.
+///
+/// This used to send `PushOutput` through the request sender synchronously —
+/// including from *inside* an interactive callback, while the host was still
+/// waiting for that callback to return. Against the real GUI host that is a
+/// nested request mid-callback: the host answers some of them through a
+/// `NullHost` stub (the line is silently lost) and the timing race around the
+/// callback's own reply contributed to a full UI deadlock — the host froze
+/// ("not responding") on every interactive placement until it was killed. The
+/// wiring-harness plugin's GUI-proven rule is the opposite: **interactive
+/// callbacks only queue; the next dispatch prints** (`flush_lines` runs at the
+/// top of every dispatch), and nothing ever issues a synchronous request from
+/// inside a callback.
 pub fn emit(line: PendingLine) {
-    let Some(sender) = get_sender() else {
-        push_deferred(line);
-        return;
-    };
-    let request = match &line {
-        PendingLine::Output(t) => PluginRequest::PushOutput(t.clone()),
-        PendingLine::Error(t) => PluginRequest::PushError(t.clone()),
-    };
-    // A transport failure *or* a host-side rejection (the host parks or refuses
-    // requests it cannot service now and answers with an error) means the line
-    // was not printed; keep the text so the next dispatch still shows it rather
-    // than losing the result silently.
-    let rejected = matches!(
-        sender.request(request),
-        Err(_) | Ok(PluginResponse::Error(_))
-    );
-    if rejected {
-        push_deferred(line);
-    }
+    push_deferred(line);
 }
 
 /// Flush queued lines through a real host. Dispatch context only.
@@ -194,10 +186,17 @@ pub fn flush(host: &mut dyn HostApi) -> usize {
 /// Publish queued entities from a background thread, so a placement that
 /// finished inside an interactive callback still reaches the document.
 ///
-/// `undo_label` opens an undo window for the whole batch; pass `None` for
-/// purely cosmetic work (a label or a helper glyph) that should not become its
-/// own undo step.
+/// **No `PushUndo` here, deliberately** — the wiring-harness plugin's
+/// GUI-proven flush sends exactly `AddEntities` + `SetDirty` and nothing else.
+/// A `PushUndo` issued from a thread races the host's interactive event
+/// handling: serviced mid-event it contributed to a full UI deadlock (the
+/// host froze on every interactive placement). The undo story instead follows
+/// the harness plugin's: the host wraps interactive commits in its own undo
+/// capture, and the deferred entities land in whatever window is current when
+/// they are drained — never their own step. `undo_label` is accepted and
+/// ignored for call-site compatibility; pass `None` for new call sites.
 pub fn spawn_flush(undo_label: Option<String>) {
+    let _ = undo_label;
     let Some(sender) = get_sender() else {
         // No channel — leave the queue for the next dispatch to pick up.
         return;
@@ -210,9 +209,6 @@ pub fn spawn_flush(undo_label: Option<String>) {
         // The delay is load-bearing: a request issued while the host is still
         // inside our callback is serviced by `NullHost` and does nothing.
         std::thread::sleep(std::time::Duration::from_millis(60));
-        if let Some(label) = undo_label {
-            let _ = sender.request(PluginRequest::PushUndo { label });
-        }
         let _ = sender.request(PluginRequest::AddEntities(entities));
         let _ = sender.request(PluginRequest::SetDirty);
     });
@@ -329,20 +325,24 @@ mod tests {
     fn a_spawned_flush_delivers_through_the_sender() {
         let _g = lock();
         let _ = take_entities();
-        // Send an undo label plus an entity, and check both reach the host.
+        // Send an undo label plus an entity, and check the entity reaches the host.
         let mock = Arc::new(MockSender::default());
         register_sender(mock.clone());
         push_entities(vec![a_point()]);
         spawn_flush(Some("EL_LADDER".to_string()));
         // The flush is deliberately delayed, so give it time to land.
         for _ in 0..40 {
-            if mock.sent.lock().map(|g| g.len()).unwrap_or(0) >= 3 {
+            if mock.sent.lock().map(|g| g.len()).unwrap_or(0) >= 2 {
                 break;
             }
             std::thread::sleep(std::time::Duration::from_millis(25));
         }
         let sent = mock.sent.lock().unwrap().clone();
-        assert!(sent.contains(&"push_undo"), "the batch needs an undo window: {sent:?}");
+        assert!(
+            !sent.contains(&"push_undo"),
+            "a PushUndo from the flush thread races the host's interactive handling — the undo \
+             story is the host's own capture plus whatever window is current at drain time: {sent:?}"
+        );
         assert!(sent.contains(&"add_entities"), "the entity must be added: {sent:?}");
         assert!(sent.contains(&"set_dirty"), "the drawing must be marked dirty: {sent:?}");
         assert!(take_entities().is_empty(), "a successful flush drains the queue");
