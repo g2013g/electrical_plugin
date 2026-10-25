@@ -386,6 +386,37 @@ const TERMINAL_HALF_W: f64 = 5.0;
 /// Half-height of a terminal block glyph, mm.
 const TERMINAL_HALF_H: f64 = 3.0;
 
+/// Build a jumper bridge between two terminal anchors.
+///
+/// A short three-point path arcing over the straight line between the
+/// terminals — the IEC convention for a bridge that does not touch the strip
+/// line. One polyline carrying the record, the same rule everything else
+/// follows.
+pub fn jumper_entity(record: &ElRecord, from: [f64; 3], to: [f64; 3]) -> EntityType {
+    let dx = to[0] - from[0];
+    let dy = to[1] - from[1];
+    let len = (dx * dx + dy * dy).sqrt().max(1e-9);
+    // Perpendicular to the run, always on the same side for a given order.
+    let (nx, ny) = (-dy / len, dx / len);
+    let lift = 3.5;
+    let mid = [
+        (from[0] + to[0]) / 2.0 + nx * lift,
+        (from[1] + to[1]) / 2.0 + ny * lift,
+        from[2],
+    ];
+    let verts = vec![
+        Vector2::new(from[0], from[1]),
+        Vector2::new(mid[0], mid[1]),
+        Vector2::new(to[0], to[1]),
+    ];
+    let mut pl = LwPolyline::from_points(verts);
+    pl.elevation = from[2];
+    pl.common.layer = LAYER_TERMINALS.to_string();
+    pl.common.color = Color::Index(1);
+    attach(record, &mut pl.common);
+    EntityType::LwPolyline(pl)
+}
+
 /// Build a terminal block: a square outline with a connection point at each end.
 ///
 /// The outline is the IEC terminal symbol — a plain square — and the two ends are

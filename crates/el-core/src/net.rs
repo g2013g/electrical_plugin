@@ -106,6 +106,20 @@ impl NetIndex {
             }
         }
 
+        // A jumper makes two terminals of one strip a single circuit, so nets
+        // merge across it exactly as if a wire had been drawn — and two wires
+        // landing one per side of the jumper belong to the same net. This must
+        // run before the grouping pass below, which reads the union-find.
+        for j in idx.jumpers.values() {
+            let (a, b) = j.rec.designators();
+            if a.trim().is_empty() || b.trim().is_empty() {
+                continue;
+            }
+            parent.entry(a.clone()).or_insert_with(|| a.clone());
+            parent.entry(b.clone()).or_insert_with(|| b.clone());
+            union(&mut parent, &a, &b);
+        }
+
         // Group wires by the root of their ends.
         let mut by_root: BTreeMap<String, Net> = BTreeMap::new();
         for w in idx.wires.values() {
@@ -254,6 +268,34 @@ mod tests {
         let n = nets.net_of_wire(1).unwrap();
         assert_eq!(n.node_count(), 2);
         assert_eq!(n.wires, vec![1]);
+    }
+
+    #[test]
+    fn a_jumper_merges_the_nets_on_either_side_of_it() {
+        use crate::model::{JumperRec, TerminalKind, TerminalRec};
+        // Two wires land one per terminal of strip X1; without the jumper they
+        // are two nets, with it they are one circuit — the terminal-strip
+        // editor's whole point.
+        let mut t1 = TerminalRec::new("t1", "X1", TerminalKind::Screw);
+        t1.number = "1".to_string();
+        let mut t2 = TerminalRec::new("t2", "X1", TerminalKind::Screw);
+        t2.number = "2".to_string();
+        let jumper = JumperRec::new("j1", "X1", "1", "2");
+        let idx = ElIndex::build(vec![
+            (900, ElRecord::encode_settings(&ElSettingsRec::default())),
+            (1, ElRecord::encode_terminal(&t1)),
+            (2, ElRecord::encode_terminal(&t2)),
+            (3, ElRecord::encode_jumper(&jumper)),
+            wire(10, "W1", "K1", "X1:1"),
+            wire(11, "W2", "K2", "X1:2"),
+        ]);
+
+        // Sanity without the jumper would be two nets; assert the union.
+        let nets = NetIndex::build(&idx);
+        assert_eq!(nets.len(), 1, "the jumper merges both wires into one net");
+        let n = nets.net_of_wire(10).unwrap();
+        assert_eq!(nets.net_of_wire(11).map(|x| x.label.clone()), Some(n.label.clone()));
+        assert!(n.nodes.contains("X1:1") && n.nodes.contains("X1:2"));
     }
 
     #[test]

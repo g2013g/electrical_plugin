@@ -237,6 +237,11 @@ fn terminals(host: &mut dyn HostApi, idx: &ElIndex) {
         strips.len()
     ));
     for (strip, list) in strips {
+        let jumpers = idx
+            .jumpers
+            .values()
+            .filter(|j| j.rec.strip == strip)
+            .count();
         let numbers: Vec<String> = list
             .iter()
             .map(|t| {
@@ -253,7 +258,15 @@ fn terminals(host: &mut dyn HostApi, idx: &ElIndex) {
                 }
             })
             .collect();
-        host.push_output(&format!("  {strip}: {}", numbers.join(" ")));
+        host.push_output(&format!(
+            "  {strip}: {}{}",
+            numbers.join(" "),
+            if jumpers > 0 {
+                format!(" ({jumpers} jumper{})", if jumpers == 1 { "" } else { "s" })
+            } else {
+                String::new()
+            }
+        ));
     }
 }
 

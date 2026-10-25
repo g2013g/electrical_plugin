@@ -105,6 +105,21 @@ impl IndexedSignal {
     }
 }
 
+/// One indexed jumper — a single polyline carrying its record, folded like
+/// every other object for the day it draws as more.
+#[derive(Debug, Clone, PartialEq)]
+pub struct IndexedJumper {
+    pub el_id: String,
+    pub rec: JumperRec,
+    pub handles: Vec<u64>,
+}
+
+impl IndexedJumper {
+    pub fn primary(&self) -> u64 {
+        self.handles.first().copied().unwrap_or(0)
+    }
+}
+
 /// One indexed ladder.
 ///
 /// Keyed by `el_id`, not by handle, because a ladder is drawn as many entities
@@ -148,6 +163,8 @@ pub struct ElIndex {
     pub connectors: BTreeMap<String, IndexedConnector>,
     /// Signal arrows by `el_id`.
     pub signals: BTreeMap<String, IndexedSignal>,
+    /// Terminal jumpers by `el_id`.
+    pub jumpers: BTreeMap<String, IndexedJumper>,
 
     /// Handles whose record failed to decode, with the reason. Surfaced as an
     /// audit finding rather than swallowed: a corrupt record is a real defect.
@@ -165,6 +182,7 @@ pub struct ElIndex {
     handle_to_cable: BTreeMap<u64, String>,
     handle_to_connector: BTreeMap<u64, String>,
     handle_to_signal: BTreeMap<u64, String>,
+    handle_to_jumper: BTreeMap<u64, String>,
     cable_parent_by_tag: BTreeMap<String, String>,
     wire_by_ref: BTreeMap<String, u64>,
     /// Which wire each drawn run belongs to. A gapped wire is several polyline
@@ -323,6 +341,22 @@ impl ElIndex {
                             .or_insert_with(|| IndexedSignal {
                                 el_id: s.el_id.clone(),
                                 rec: s,
+                                handles: Vec::new(),
+                            })
+                            .handles
+                            .push(handle);
+                    }
+                    Err(e) => idx.decode_errors.push((handle, e)),
+                },
+                KIND_JUMPER => match rec.decode_jumper() {
+                    Ok(j) => {
+                        idx.el_id_to_handles.entry(j.el_id.clone()).or_default().push(handle);
+                        idx.handle_to_jumper.insert(handle, j.el_id.clone());
+                        idx.jumpers
+                            .entry(j.el_id.clone())
+                            .or_insert_with(|| IndexedJumper {
+                                el_id: j.el_id.clone(),
+                                rec: j,
                                 handles: Vec::new(),
                             })
                             .handles
@@ -524,6 +558,13 @@ impl ElIndex {
         self.handle_to_signal
             .get(&handle)
             .and_then(|id| self.signals.get(id))
+    }
+
+    /// The jumper a drawn part belongs to.
+    pub fn jumper_of_handle(&self, handle: u64) -> Option<&IndexedJumper> {
+        self.handle_to_jumper
+            .get(&handle)
+            .and_then(|id| self.jumpers.get(id))
     }
 
     /// The marker that owns a cable's identity.

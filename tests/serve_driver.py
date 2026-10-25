@@ -666,6 +666,57 @@ def phase_signals_and_project():
     s.close()
 
 
+def phase_terminal_jumpers():
+    print("\n── terminal jumpers ──")
+    s = session()
+    s.send({"op": "new"})
+    s.run("EL_SETTINGS WIREMODE=S WIRE_FORMAT=W%N WIRE_START=1")
+    # A three-terminal strip, two devices, one wire per terminal — the jumper
+    # decides whether those wires are one circuit or two.
+    s.run("EL_TERMINAL screw X1 20,150")
+    s.run("EL_TERMINAL screw X1 40,150 NO=2")
+    s.run("EL_TERMINAL screw X1 60,150 NO=3")
+    s.run("EL_COMPONENT K K1 20,210")
+    s.run("EL_COMPONENT K K2 40,220")
+    s.run("EL_WIRE FROM=K1.A1 TO=X1:1")
+    s.run("EL_WIRE FROM=K2.A1 TO=X1:2")
+    s.run("EL_WIRENO")
+    strip_before = s.count_on(TERMINAL_LAYER)
+
+    s.run("EL_HIGHLIGHT W1")
+    alone = s.count_on(HILITE_LAYER)
+    s.run("EL_TERMINAL JUMPER X1:1 X1:2")
+    glyph = s.count_on(TERMINAL_LAYER) - strip_before
+    check("the jumper draws a bridge glyph", glyph >= 1, f"{glyph} new entity(ies)")
+    s.run("EL_HIGHLIGHT CLEAR")
+    s.run("EL_HIGHLIGHT W1")
+    merged = s.count_on(HILITE_LAYER)
+    check("the jumper merges both wires into one net", alone == 1 and merged == 2, f"{alone} → {merged} traced")
+    s.run("EL_HIGHLIGHT CLEAR")
+
+    text = s.run_and_collect("EL_TERMINAL JUMPER X1:2 X1:1")
+    check("a duplicate bridge is refused", "already bridged" in text, text[:200])
+    s.run("EL_TERMINAL screw X2 100,150 NO=1")
+    text = s.run_and_collect("EL_TERMINAL JUMPER X1:1 X2:1")
+    check("a cross-strip jumper is refused", "different strips" in text, text[:200])
+
+    r = s.run("EL_AUDIT")
+    check("the audit adds no jumper findings", "JUMPER_" not in json.dumps(r), json.dumps(r)[:200])
+
+    # Deleting a terminal takes its jumper with it — a bridge naming a terminal
+    # that is gone would be a permanent audit error.
+    s.run("EL_DELETE X1:1")
+    r = s.run("EL_AUDIT")
+    check("the jumper dies with its terminal", "JUMPER_DANGLING" not in json.dumps(r), json.dumps(r)[:200])
+
+    # The terminal plan lists who is bridged to whom.
+    s.run("EL_TERMINAL JUMPER X1:2 X1:3")
+    s.run("EL_REPORT TERMINALS term.csv FORCE")
+    plan = read(os.path.join(WORK, "term.csv")).replace("\r\n", "\n")
+    check("the terminal plan carries a jumper column", "JUMPERED" in plan and "X1:3" in plan, plan[:400])
+    s.close()
+
+
 def phase_failures_and_cleanup():
     print("\n── failure reporting and cleanup ──")
     s = session()
@@ -1394,6 +1445,7 @@ def main():
     phase_wires_and_numbering()
     phase_wire_gap_and_trim()
     phase_signals_and_project()
+    phase_terminal_jumpers()
     phase_failures_and_cleanup()
     phase_library()
     phase_components()

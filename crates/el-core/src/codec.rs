@@ -310,6 +310,30 @@ impl ElRecord {
         })
     }
 
+    // ── jumper ───────────────────────────────────────────────────────────
+
+    pub fn encode_jumper(rec: &JumperRec) -> ElRecord {
+        let mut r = ElRecord::new(KIND_JUMPER, &rec.el_id);
+        r.put_str("STRIP", &rec.strip);
+        r.put_str("ANO", &rec.a_number);
+        r.put_str("BNO", &rec.b_number);
+        r
+    }
+
+    pub fn decode_jumper(&self) -> Result<JumperRec, DecodeError> {
+        self.check_schema()?;
+        let el_id = self
+            .el_id()
+            .ok_or_else(|| DecodeError("missing ELID key".to_string()))?
+            .to_string();
+        Ok(JumperRec {
+            el_id,
+            strip: self.get_str("STRIP").unwrap_or("").to_string(),
+            a_number: self.get_str("ANO").unwrap_or("").to_string(),
+            b_number: self.get_str("BNO").unwrap_or("").to_string(),
+        })
+    }
+
     // ── component ────────────────────────────────────────────────────────
 
     pub fn encode_component(rec: &ElComponentRec) -> ElRecord {

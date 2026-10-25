@@ -36,6 +36,7 @@ pub const KIND_TERMINAL: &str = "terminal";
 pub const KIND_CABLE: &str = "cable";
 pub const KIND_CONNECTOR: &str = "connector";
 pub const KIND_SIGNAL: &str = "signal";
+pub const KIND_JUMPER: &str = "jumper";
 pub const KIND_XREF: &str = "xref";
 
 // ── drawing layers ───────────────────────────────────────────────────────
@@ -374,6 +375,48 @@ impl TerminalRec {
             return self.tag_strip.clone();
         }
         format!("{}:{}", self.tag_strip, self.number)
+    }
+}
+
+// ── jumper record ────────────────────────────────────────────────────────
+
+/// A jumper bridging two terminals of one strip into a single circuit.
+///
+/// This is the electrical core of a terminal strip editor: two jumpered
+/// terminals are one node, so nets derived from wires merge across the
+/// jumper (`net.rs` unions the designators), while the drawn terminals keep
+/// their own numbers and parts. The record names terminals by their numbers
+/// on `strip` — never by handle or `el_id`, for the usual reason.
+#[derive(Debug, Clone, PartialEq)]
+pub struct JumperRec {
+    pub el_id: String,
+    pub strip: String,
+    pub a_number: String,
+    pub b_number: String,
+}
+
+impl JumperRec {
+    pub fn new(el_id: &str, strip: &str, a_number: &str, b_number: &str) -> Self {
+        JumperRec {
+            el_id: el_id.to_string(),
+            strip: strip.to_string(),
+            a_number: a_number.to_string(),
+            b_number: b_number.to_string(),
+        }
+    }
+
+    /// The two designators the jumper unites, in record order.
+    pub fn designators(&self) -> (String, String) {
+        (
+            format!("{}:{}", self.strip, self.a_number),
+            format!("{}:{}", self.strip, self.b_number),
+        )
+    }
+
+    /// Does this jumper touch `designator` (`X1:1`)?
+    pub fn touches(&self, designator: &str) -> bool {
+        let (a, b) = self.designators();
+        a == designator || b == designator
     }
 }
 

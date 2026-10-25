@@ -193,6 +193,8 @@ impl CadModule for ElectricalModule {
                                 ("EL_TERMINAL multi", "Multi-level terminal", IconKind::Glyph("▥")),
                                 ("EL_TERMINAL test", "Test terminal", IconKind::Glyph("⊙")),
                                 ("EL_TERMINAL NUMBER", "Renumber strips", IconKind::Glyph("#")),
+                                ("EL_TERMINAL JUMPER", "Bridge two terminals", IconKind::Glyph("⌢")),
+                                ("EL_TERMINAL JUMPER LIST", "List jumpers", IconKind::Glyph("≡")),
                                 ("EL_TERMINAL", "List terminals", IconKind::Glyph("≡")),
                             ],
                             default: "EL_TERMINAL screw",

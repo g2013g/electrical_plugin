@@ -255,6 +255,71 @@ pub fn check(idx: &ElIndex, catalog: Option<&Catalog>) -> Vec<Issue> {
     // ── terminals ────────────────────────────────────────────────────────
     check_terminals(idx, &mut issues);
 
+    // ── jumpers ──────────────────────────────────────────────────────────
+    let mut seen_pairs: BTreeMap<String, String> = BTreeMap::new();
+    for j in idx.jumpers.values() {
+        let (a, b) = j.rec.designators();
+        let label = if a.is_empty() && b.is_empty() {
+            format!("jumper 0x{:X}", j.primary())
+        } else {
+            format!("jumper {a}–{b}")
+        };
+        if j.rec.strip.is_empty() || j.rec.a_number.is_empty() || j.rec.b_number.is_empty() {
+            issues.push(Issue::error(
+                "JUMPER_INCOMPLETE",
+                format!("{label} does not name two terminals of a strip"),
+            ));
+            continue;
+        }
+        if a == b {
+            issues.push(Issue::error(
+                "JUMPER_SELF",
+                format!("{label} bridges a terminal to itself"),
+            ));
+            continue;
+        }
+        // Both sides must resolve to terminals, and to the same strip.
+        let find_terminal = |d: &str| {
+            idx.terminals.values().find(|t| t.rec.designator() == d)
+        };
+        let ta = find_terminal(&a);
+        let tb = find_terminal(&b);
+        if ta.is_none() || tb.is_none() {
+            issues.push(Issue::error(
+                "JUMPER_DANGLING",
+                format!(
+                    "{label} names a terminal that is not in this drawing ({})",
+                    match (ta.is_none(), tb.is_none()) {
+                        (true, true) => format!("{a} and {b}"),
+                        (true, false) => a,
+                        _ => b,
+                    }
+                ),
+            ));
+            continue;
+        }
+        if ta.unwrap().rec.tag_strip != tb.unwrap().rec.tag_strip {
+            issues.push(Issue::error(
+                "JUMPER_CROSS_STRIP",
+                format!("{label} bridges two different strips — a jumper stays on one strip"),
+            ));
+        }
+        // A pair two records cover is a doubled bridge; one of them is stale.
+        let pair_key = {
+            let (mut x, mut y) = (a.clone(), b.clone());
+            if x > y {
+                std::mem::swap(&mut x, &mut y);
+            }
+            format!("{x}|{y}")
+        };
+        if seen_pairs.insert(pair_key, j.rec.el_id.clone()).is_some() {
+            issues.push(Issue::warning(
+                "JUMPER_DUPLICATE",
+                format!("{label} is bridged twice"),
+            ));
+        }
+    }
+
     // ── cables ───────────────────────────────────────────────────────────
     check_cables(idx, &mut issues);
 

@@ -332,10 +332,20 @@ pub fn wire_labels(idx: &ElIndex) -> TableLayout {
 /// Terminal plan: terminals grouped by strip, in strip order.
 pub fn terminal_plan(idx: &ElIndex) -> TableLayout {
     let mut rows: Vec<Vec<String>> = Vec::new();
+    // Who each terminal is bridged to, so a jumpered group reads as one
+    // circuit on the plan — the strip editor's information, on paper.
+    let mut partners: BTreeMap<String, Vec<String>> = BTreeMap::new();
+    for j in idx.jumpers.values() {
+        let (a, b) = j.rec.designators();
+        partners.entry(a.clone()).or_default().push(b.clone());
+        partners.entry(b).or_default().push(a);
+    }
     let strips = idx.strips();
     let strip_count = strips.len();
     for (strip, terminals) in strips {
         for t in terminals {
+            let designator = t.rec.designator();
+            let jumped = partners.get(&designator);
             rows.push(vec![
                 strip.clone(),
                 if t.rec.number.is_empty() {
@@ -347,16 +357,21 @@ pub fn terminal_plan(idx: &ElIndex) -> TableLayout {
                 dash(&t.rec.part_number),
                 dash(&t.rec.description),
                 dash(&t.rec.linked),
+                match jumped {
+                    Some(p) if !p.is_empty() => p.join(", "),
+                    _ => EMPTY_CELL.to_string(),
+                },
             ]);
         }
     }
     TableLayout::new(
         &format!(
-            "Terminal plan — {} strip(s), {} terminal(s)",
+            "Terminal plan — {} strip(s), {} terminal(s), {} jumper(s)",
             strip_count,
-            rows.len()
+            rows.len(),
+            idx.jumpers.len()
         ),
-        &["STRIP", "NO", "TYPE", "PART", "DESCRIPTION", "LINKED"],
+        &["STRIP", "NO", "TYPE", "PART", "DESCRIPTION", "LINKED", "JUMPERED TO"],
         rows,
     )
 }

@@ -174,6 +174,16 @@ fn describe(cap: &Capture, handle: u64, record: &el_core::codec::ElRecord) -> St
         _ => {}
     }
 
+    match record.clone().decode_jumper() {
+        Ok(j) if kind == el_core::model::KIND_JUMPER => {
+            let (a, b) = j.designators();
+            out.push_str(&format!("\n  jumper   : {a} – {b}"));
+            out.push_str(&format!("\n  strip    : {}", or_dash(&j.strip)));
+            out.push_str("\n  effect   : the two terminals are one circuit — nets merge across the jumper");
+        }
+        _ => {}
+    }
+
     match record.clone().decode_component() {
         Ok(c) if kind == KIND_COMPONENT => {
             out.push_str(&format!("\n  tag      : {}", or_dash(&c.tag)));

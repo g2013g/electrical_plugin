@@ -159,6 +159,26 @@ fn resolve(
         return Ok((format!("signal {}", s.rec.name), handles, "signal"));
     }
 
+    if let Some(t) = capture
+        .index
+        .terminals
+        .values()
+        .find(|t| t.rec.designator().eq_ignore_ascii_case(token))
+    {
+        // A jumper bridging this terminal has no reason to outlive it: the
+        // bridge names a terminal that would no longer exist.
+        let mut handles = capture.index.handles_for_el_id(&t.rec.el_id).to_vec();
+        for j in capture
+            .index
+            .jumpers
+            .values()
+            .filter(|j| j.rec.touches(&t.rec.designator()))
+        {
+            handles.extend(capture.index.handles_for_el_id(&j.rec.el_id).iter().copied());
+        }
+        return Ok((t.rec.designator(), handles, "terminal"));
+    }
+
     // A tag names a *device*, and a device is its parent plus every contact
     // sharing its tag. Deleting only one of them would leave the rest behind
     // with a tag that no longer resolves — so the whole group goes.
@@ -216,6 +236,23 @@ fn resolve_handle(
     if let Some(s) = capture.index.signal_of_handle(handle) {
         let handles = capture.index.handles_for_el_id(&s.rec.el_id).to_vec();
         return Ok((format!("signal {}", s.rec.name), handles, "signal"));
+    }
+    if let Some(t) = capture.index.terminal_of_handle(handle) {
+        let mut handles = capture.index.handles_for_el_id(&t.rec.el_id).to_vec();
+        for j in capture
+            .index
+            .jumpers
+            .values()
+            .filter(|j| j.rec.touches(&t.rec.designator()))
+        {
+            handles.extend(capture.index.handles_for_el_id(&j.rec.el_id).iter().copied());
+        }
+        return Ok((t.rec.designator(), handles, "terminal"));
+    }
+    if let Some(j) = capture.index.jumper_of_handle(handle) {
+        let handles = capture.index.handles_for_el_id(&j.rec.el_id).to_vec();
+        let (a, b) = j.rec.designators();
+        return Ok((format!("jumper {a}–{b}"), handles, "jumper"));
     }
     Err(format!("{token} is not an electrical object"))
 }

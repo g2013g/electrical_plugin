@@ -32,6 +32,11 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
             renumber(host, &mut a);
             return;
         }
+        Some("JUMPER") => {
+            a.free.remove(0);
+            run_jumper(host, &a);
+            return;
+        }
         Some("CLEAR") => {
             clear(host);
             return;
@@ -439,4 +444,161 @@ fn list(host: &mut dyn HostApi) {
                 .join(", ")
         ));
     }
+}
+
+// ── jumpers ──────────────────────────────────────────────────────────────
+
+/// Run `EL_TERMINAL JUMPER <a> <b> | CLEAR <a> [<b>] | LIST`.
+///
+/// A jumper bridges two terminals of one strip into a single circuit: nets
+/// merge across it, the terminal plan lists it, and the audit refuses one
+/// whose terminals are missing or on different strips.
+fn run_jumper(host: &mut dyn HostApi, a: &Args) {
+    let idx = crate::codec::build_index(host.document());
+
+    let clearing = a.free.iter().any(|t| t.eq_ignore_ascii_case("CLEAR"));
+    let listing = a.free.is_empty()
+        || a.free.iter().any(|t| t.eq_ignore_ascii_case("LIST"));
+    let tokens: Vec<String> = a
+        .free
+        .iter()
+        .filter(|t| !t.eq_ignore_ascii_case("CLEAR") && !t.eq_ignore_ascii_case("LIST"))
+        .cloned()
+        .collect();
+
+    if listing && !clearing {
+        jumper_list(host, &idx);
+        return;
+    }
+
+    if clearing {
+        jumper_clear(host, &idx, &tokens);
+        return;
+    }
+
+    if tokens.len() != 2 {
+        host.push_error(
+            "EL_TERMINAL: bridge two terminals — EL_TERMINAL JUMPER X1:1 X1:2 (or CLEAR, LIST)",
+        );
+        return;
+    }
+    let (Some(ta), Some(tb)) = (
+        resolve_terminal(&idx, &tokens[0]),
+        resolve_terminal(&idx, &tokens[1]),
+    ) else {
+        host.push_error(&format!(
+            "EL_TERMINAL: no terminal matches {:?} / {:?} — name it by its designator (X1:1)",
+            tokens[0], tokens[1]
+        ));
+        return;
+    };
+    if ta.rec.el_id == tb.rec.el_id {
+        host.push_error("EL_TERMINAL: a jumper bridges two different terminals");
+        return;
+    }
+    if ta.rec.tag_strip != tb.rec.tag_strip {
+        host.push_error(&format!(
+            "EL_TERMINAL: {} and {} are on different strips — a jumper stays on one strip",
+            ta.rec.designator(),
+            tb.rec.designator()
+        ));
+        return;
+    }
+    if idx.jumpers.values().any(|j| {
+        j.rec.strip == ta.rec.tag_strip
+            && ((j.rec.a_number == ta.rec.number && j.rec.b_number == tb.rec.number)
+                || (j.rec.a_number == tb.rec.number && j.rec.b_number == ta.rec.number))
+    }) {
+        host.push_error(&format!(
+            "EL_TERMINAL: {}–{} is already bridged",
+            ta.rec.designator(),
+            tb.rec.designator()
+        ));
+        return;
+    }
+
+    let rec = el_core::model::JumperRec::new(
+        &el_core::new_el_id(),
+        &ta.rec.tag_strip,
+        &ta.rec.number,
+        &tb.rec.number,
+    );
+    let record = ElRecord::encode_jumper(&rec);
+    let from = [ta.rec.origin_x, ta.rec.origin_y, 0.0];
+    let to = [tb.rec.origin_x, tb.rec.origin_y, 0.0];
+
+    host.push_undo("EL_TERMINAL JUMPER");
+    host.add_entity(crate::geometry::jumper_entity(&record, from, to));
+    host.bump_geometry();
+    host.set_dirty();
+    host.push_output(&format!(
+        "EL_TERMINAL: {} and {} are one circuit now — nets merge across the jumper",
+        ta.rec.designator(),
+        tb.rec.designator()
+    ));
+}
+
+/// Resolve a terminal by its full designator (`X1:1`).
+fn resolve_terminal<'a>(
+    idx: &'a el_core::ElIndex,
+    token: &str,
+) -> Option<&'a el_core::index::IndexedTerminal> {
+    idx.terminals
+        .values()
+        .find(|t| t.rec.designator().eq_ignore_ascii_case(token))
+}
+
+fn jumper_list(host: &mut dyn HostApi, idx: &el_core::ElIndex) {
+    if idx.jumpers.is_empty() {
+        host.push_output(
+            "EL_TERMINAL: no jumpers — EL_TERMINAL JUMPER X1:1 X1:2 bridges two terminals",
+        );
+        return;
+    }
+    host.push_output(&format!(
+        "EL_TERMINAL: {} jumper(s)",
+        idx.jumpers.len()
+    ));
+    for j in idx.jumpers.values() {
+        let (a, b) = j.rec.designators();
+        host.push_output(&format!("  {a} – {b}"));
+    }
+}
+
+fn jumper_clear(host: &mut dyn HostApi, idx: &el_core::ElIndex, tokens: &[String]) {
+    let targets: Vec<&el_core::index::IndexedJumper> = match tokens.len() {
+        0 => idx.jumpers.values().collect(),
+        1 => match resolve_terminal(idx, &tokens[0]) {
+            Some(t) => idx
+                .jumpers
+                .values()
+                .filter(|j| j.rec.touches(&t.rec.designator()))
+                .collect(),
+            None => {
+                host.push_error(&format!(
+                    "EL_TERMINAL: no terminal matches {:?} — CLEAR takes a designator (X1:1)",
+                    tokens[0]
+                ));
+                return;
+            }
+        },
+        _ => {
+            host.push_error("EL_TERMINAL: CLEAR takes one designator (every jumper on it) — a pair is cleared by clearing one of them");
+            return;
+        }
+    };
+    if targets.is_empty() {
+        host.push_output("EL_TERMINAL: no jumpers to clear");
+        return;
+    }
+    host.push_undo("EL_TERMINAL JUMPER CLEAR");
+    for j in &targets {
+        crate::cmds::common::remove_handles(host, idx.handles_for_el_id(&j.rec.el_id), "EL_TERMINAL JUMPER CLEAR");
+    }
+    host.bump_geometry();
+    host.set_dirty();
+    host.push_output(&format!(
+        "EL_TERMINAL: {} jumper(s) removed",
+        targets.len()
+    ));
 }
