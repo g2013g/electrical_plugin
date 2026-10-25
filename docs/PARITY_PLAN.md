@@ -17,7 +17,7 @@ this queue:
 | 4 Ladders | — | ladders + rungs ✓ |
 | 5 Schematic components | icon menu, parent/child, catalog | **expanded icon set ✓ (52 symbols)**, links/xrefs ✓, catalog ✓; multiple-insert & swap pending |
 | 6 Schematic editing | move/copy/retag/audit | move/rotate/retag ✓, audit ✓, **GUI hang fixed** |
-| 7 Connectors & circuits | parametric connectors, circuit builder | connectors ✓; **circuit builder absent (T8)** |
+| 7 Connectors & circuits | parametric connectors, circuit builder | connectors ✓; **circuit builder landed 2026-10-25**: `EL_CIRCUIT start-stop / dol / fwd-rev` — table-driven templates, slot-key link resolution (shared parent tags stay unambiguous), family tag allocation, prewired named-pin wires. Remaining: spreadsheet-driven template authoring, more circuits. |
 | 8 Panel layouts | footprints, balloons | **absent (T4)** |
 | 9 Reports | schematic/panel reports | 9 reports ✓ (panel reports need T4) |
 | 10 PLC modules | parametric modules | **T5 core landed 2026-10-25**: `EL_PLC <tag> di,do` parametric modules (KIND_PLC), auto-addressed points as ordinary pins (wires land by name, move re-seats), `EL_PLC EDIT` regenerates, PLCIO report, audit `PLC_NO_TAG/DUP_TAG/NO_POINTS/DUP_ADDRESS/NO_WIRES`. Remaining: spreadsheet import of I/O lists, stand-alone points, module catalog lookup. |

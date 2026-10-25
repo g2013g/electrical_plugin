@@ -165,6 +165,17 @@ impl CadModule for ElectricalModule {
                         tool("EL_XREF", "Cross-ref", "⇉", "EL_XREF"),
                         tool("EL_RETAG", "Retag", "⟲", "EL_RETAG"),
                         RibbonItem::Dropdown {
+                            id: "EL_CIRCUIT_DD",
+                            icon: IconKind::Glyph("⚙"),
+                            items: vec![
+                                ("EL_CIRCUIT LIST", "Pick a circuit", IconKind::Glyph("⚙")),
+                                ("EL_CIRCUIT start-stop", "Start/stop station", IconKind::Glyph("⏻")),
+                                ("EL_CIRCUIT dol", "DOL motor starter", IconKind::Glyph("⏼")),
+                                ("EL_CIRCUIT fwd-rev", "Forward/reverse control", IconKind::Glyph("⇄")),
+                            ],
+                            default: "EL_CIRCUIT LIST",
+                        },
+                        RibbonItem::Dropdown {
                             id: "EL_SIGNAL_DD",
                             icon: IconKind::Glyph("⇥"),
                             items: vec![
@@ -416,6 +427,7 @@ impl BuiltinPlugin for ElectricalPlugin {
             "EL_PANEL" => cmds::panel::run(host, &args),
             "EL_PLC" => cmds::plc::run(host, &args),
             "EL_TITLEBLOCK" | "EL_TB" => cmds::titleblock::run(host, &args),
+            "EL_CIRCUIT" => cmds::circuit::run(host, &args),
             "EL_BALLOON" | "EL_BAL" => cmds::panel::run_balloon(host, &args),
             "EL_CABLE" => cmds::cable::run(host, &args),
             "EL_CONNECTOR" | "EL_CONN" => cmds::connector::run(host, &args),
@@ -473,6 +485,7 @@ mod completion_tests {
         "EL_PLC",
         "EL_TITLEBLOCK",
         "EL_TB",
+        "EL_CIRCUIT",
         "EL_BALLOON",
         "EL_BAL",
         "EL_PROJECT",

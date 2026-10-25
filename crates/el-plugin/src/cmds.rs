@@ -4,6 +4,7 @@ pub mod attach;
 pub mod audit;
 pub mod cable;
 pub mod catalog_cmd;
+pub mod circuit;
 pub mod common;
 pub mod component;
 pub mod connector;

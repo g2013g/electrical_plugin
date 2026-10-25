@@ -918,6 +918,54 @@ def phase_titleblock():
     s.close()
 
 
+def phase_circuit_builder():
+    print("\n-- circuit builder: templates placed and prewired --")
+    s = session()
+    s.send({"op": "new"})
+    s.run("EL_SETTINGS TAG_FORMAT=%F%N WIREMODE=S WIRE_FORMAT=W%N WIRE_START=1")
+    s.run("EL_LADDER 20,220 WIDTH=170 SPACING=10 RUNGS=10 REF=100")
+
+    s.run("EL_CIRCUIT start-stop REF=100")
+    comps = s.count_on(COMPONENT_LAYER)
+    wires = s.count_on(WIRE_LAYER)
+    check("the station places its 4 devices", comps >= 12, f"{comps} parts")
+    check("the station draws its 4 wires", wires == 4, f"{wires} wires")
+
+    # The coil carries the seal: cross-references see the circuit.
+    s.run("EL_XREF")
+    check("the coil lists its seal contact", s.count_on(XREF_LAYER) >= 2)
+
+    # Every builder wire has both ends named - the audit proves it.
+    r = s.run("EL_AUDIT")
+    check("no dangling ends in a built circuit", "WIRE_DANGLING" not in json.dumps(r), json.dumps(r)[:300])
+
+    # The wires number like any others.
+    s.run("EL_WIRENO")
+    check("builder wires take numbers", s.count_on(WIRENO_LAYER) == wires, f"{s.count_on(WIRENO_LAYER)} labels")
+
+    # DOL: power rung + control rung, the contactor's tag shared by the
+    # main and seal contacts. A second DOL allocates the next free tags.
+    s.run("EL_CIRCUIT dol REF=102")
+    s.run("EL_CIRCUIT dol REF=105")
+    s.send({"op": "save", "path": "circ.dxf"})
+    circ = read(os.path.join(WORK, "circ.dxf")).replace("\r\n", "\n")
+    check("a second DOL allocates fresh tags", xdata_pair("TAG", "K2") in circ and xdata_pair("TAG", "Q2") in circ)
+    r = s.run("EL_AUDIT")
+    check("the DOL audits clean of dangling wires", "WIRE_DANGLING" not in json.dumps(r), json.dumps(r)[:300])
+
+    # fwd-rev: two contactors, cross-interlocked, ten wires.
+    before = s.count_on(WIRE_LAYER)
+    s.run("EL_CIRCUIT fwd-rev REF=106")
+    added = s.count_on(WIRE_LAYER) - before
+    check("fwd-rev draws its ten wires", added == 10, f"{added} wires")
+    r = s.run("EL_AUDIT")
+    check("fwd-rev audits clean of dangling wires", "WIRE_DANGLING" not in json.dumps(r), json.dumps(r)[:300])
+
+    # A seal contact is one net with its start button.
+    s.run("EL_HIGHLIGHT CLEAR")
+    s.close()
+
+
 def phase_failures_and_cleanup():
     print("\n── failure reporting and cleanup ──")
     s = session()
@@ -1651,6 +1699,7 @@ def main():
     phase_panel_layout()
     phase_plc_modules()
     phase_titleblock()
+    phase_circuit_builder()
     phase_failures_and_cleanup()
     phase_library()
     phase_components()

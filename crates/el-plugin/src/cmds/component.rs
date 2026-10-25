@@ -114,7 +114,7 @@ fn resolve_symbol<'a>(lib: &'a SymbolLibrary, token: Option<&str>) -> Option<&'a
 }
 
 /// The record for a new component, with its identity and connection points.
-fn build_record(
+pub(crate) fn build_record(
     def: &SymbolDef,
     tag: Option<&str>,
     is_child: bool,
