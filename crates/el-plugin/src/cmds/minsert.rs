@@ -12,8 +12,7 @@ use ocs_plugin_api::host::HostApi;
 
 use el_core::codec::ElRecord;
 use el_core::model::LadderRec;
-use el_core::symbol::SymbolLibrary;
-use el_core::{tagging, ElIndex};
+use el_core::tagging;
 
 use crate::cmds::common::Args;
 use crate::cmds::component;

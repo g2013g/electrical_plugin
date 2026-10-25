@@ -10,8 +10,6 @@
 
 use ocs_plugin_api::host::HostApi;
 
-use el_core::ElIndex;
-
 use crate::cmds::common::Args;
 
 /// Run `EL_EXPORT WH [path.csv] [FORCE]`.

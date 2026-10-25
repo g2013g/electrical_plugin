@@ -17,10 +17,10 @@ this queue:
 | 4 Ladders | — | ladders + rungs ✓ |
 | 5 Schematic components | icon menu, parent/child, catalog | **expanded icon set ✓ (52 symbols)**, links/xrefs ✓, catalog ✓, **multiple-insert ✓ (`EL_MINSERT`)**; swap/update pending |
 | 6 Schematic editing | move/copy/retag/audit | move/rotate/retag ✓, audit ✓, **GUI hang fixed** |
-| 7 Connectors & circuits | parametric connectors, circuit builder | connectors ✓; **circuit builder landed 2026-10-25**: `EL_CIRCUIT start-stop / dol / fwd-rev` — table-driven templates, slot-key link resolution (shared parent tags stay unambiguous), family tag allocation, prewired named-pin wires. Remaining: spreadsheet-driven template authoring, more circuits. |
+| 7 Connectors & circuits | parametric connectors, circuit builder | connectors ✓; **circuit builder landed 2026-10-25**: `EL_CIRCUIT start-stop / dol / fwd-rev` — table-driven templates, slot-key link resolution (shared parent tags stay unambiguous), family tag allocation, prewired named-pin wires. **swap ✓ (`EL_COMPONENT SWAP`) · two-wire + star-delta templates ✓**; remaining: spreadsheet-driven template authoring. |
 | 8 Panel layouts | footprints, balloons | **absent (T4)** |
 | 9 Reports | schematic/panel reports | 9 reports ✓ (panel reports need T4) |
-| 10 PLC modules | parametric modules | **T5 core landed 2026-10-25**: `EL_PLC <tag> di,do` parametric modules (KIND_PLC), auto-addressed points as ordinary pins (wires land by name, move re-seats), `EL_PLC EDIT` regenerates, PLCIO report, audit `PLC_NO_TAG/DUP_TAG/NO_POINTS/DUP_ADDRESS/NO_WIRES`. Remaining: spreadsheet import of I/O lists, stand-alone points, module catalog lookup. |
+| 10 PLC modules | parametric modules | **T5 core landed 2026-10-25**: `EL_PLC <tag> di,do` parametric modules (KIND_PLC), auto-addressed points as ordinary pins (wires land by name, move re-seats), `EL_PLC EDIT` regenerates, PLCIO report, audit `PLC_NO_TAG/DUP_TAG/NO_POINTS/DUP_ADDRESS/NO_WIRES`. **spreadsheet I/O import ✓ (`EL_PLC IMPORT`)**; remaining: stand-alone points, module catalog lookup. |
 | 11 Terminals | strips, jumpers, TSE | **T3 complete** ✓ (multi-tier diagrams pending) |
 | 12 Settings/templates/plot | title blocks, plot | settings ✓; **T6 landed 2026-10-25**: `EL_TITLEBLOCK` frame + title table, fields rendered live from settings and the project register (OF n), `UPDATE` re-render. Remaining: plot styles/templates, WDT-style field mapping. |
 | 13 Creating symbols | symbol builder | `EL_SYMBOL` capture ✓ |

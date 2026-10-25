@@ -25,6 +25,15 @@ use crate::state::{self, PendingLine};
 
 /// Run `EL_COMPONENT [symbol|family] [tag] [x,y] [ROT=deg] [KEY=VALUE …]`.
 pub fn run(host: &mut dyn HostApi, args: &[&str]) {
+    // SWAP is its own action: its first word is a placed tag, not a symbol.
+    if Args::parse(args)
+        .first_word()
+        .map(|w| w.eq_ignore_ascii_case("SWAP"))
+        .unwrap_or(false)
+    {
+        run_swap(host, args);
+        return;
+    }
     let mut a = Args::parse(args);
 
     let lib = match library::load(host) {
@@ -470,5 +479,127 @@ mod tests {
         assert_eq!(snap_to_rung(&idx, [50.0, 100.5, 0.0]), [50.0, 100.0, 0.0]);
         // 130 is not near any rung, so the point is left alone.
         assert_eq!(snap_to_rung(&idx, [50.0, 130.0, 0.0]), [50.0, 130.0, 0.0]);
+    }
+}
+
+// ── swap ─────────────────────────────────────────────────────────────────
+
+/// Run `EL_COMPONENT SWAP <tag> <new-symbol> [KEEPRESET]`.
+///
+/// Replace a placed device's symbol, keeping what makes it *that device*:
+/// the tag, origin, rotation, catalog, ratings, and — for a child — its
+/// parent. Wires naming the tag are re-seated onto the new symbol's pins; a
+/// wire whose pin name no longer exists is left alone and the audit says so,
+/// which is the honest outcome of swapping to a symbol with different pins.
+pub fn run_swap(host: &mut dyn HostApi, args: &[&str]) {
+    let a = Args::parse(args);
+    let lib = match library::load(host) {
+        Ok(l) => l,
+        Err(e) => {
+            host.push_error(&format!("EL_COMPONENT: {e}"));
+            return;
+        }
+    };
+    let words: Vec<String> = a
+        .free
+        .iter()
+        .filter(|t| !t.contains(','))
+        .skip(1) // the SWAP word
+        .cloned()
+        .collect();
+    let (Some(tag), Some(new_symbol)) = (words.first(), words.get(1)) else {
+        host.push_error("EL_COMPONENT: SWAP needs a tag and a symbol — EL_COMPONENT SWAP F1 fuse-breaker");
+        return;
+    };
+
+    let idx = crate::codec::build_index(host.document());
+    // A child (a contact) swaps as itself: same parent, same shared tag.
+    let Some(found) = idx
+        .parent_by_tag(tag)
+        .map(|p| p.rec.clone())
+        .or_else(|| idx.component_by_tag(tag).map(|c| c.rec.clone()))
+    else {
+        host.push_error(&format!(
+            "EL_COMPONENT: nothing tagged {tag:?} is placed — SWAP replaces a placed device"
+        ));
+        return;
+    };
+    let Some(def) = lib.get(new_symbol) else {
+        host.push_error(&format!(
+            "EL_COMPONENT: {new_symbol:?} is not in the library — EL_LIB LIST shows the symbols"
+        ));
+        return;
+    };
+    if def.is_child != found.is_child {
+        host.push_error(&format!(
+            "EL_COMPONENT: {} is a {} symbol but {} is a {} — swap within the same role",
+            new_symbol,
+            if def.is_child { "child" } else { "parent" },
+            tag,
+            if found.is_child { "child" } else { "parent" }
+        ));
+        return;
+    }
+
+    // Everything but the symbol identity survives; the family follows the new
+    // symbol (a fuse-breaker is still family F, but the family is the
+    // symbol's to say).
+    let mut rec = found.clone();
+    rec.family = def.family.clone();
+    rec.symbol = def.name.clone();
+    // Pins re-derive from the new definition.
+
+    host.push_undo(&format!("EL_COMPONENT SWAP {} -> {}", rec.tag, def.name));
+    let record = ElRecord::encode_component(&rec);
+    let parts = crate::geometry::component_entities(
+        &record,
+        def,
+        &rec.tag,
+        [rec.origin_x, rec.origin_y, 0.0],
+        rec.rotation_rad(),
+    );
+    let old: Vec<u64> = idx.handles_for_el_id(&rec.el_id).to_vec();
+    for h in &old {
+        host.remove_entity(ocs_plugin_api::host::codec::Handle::new(*h));
+    }
+    host.add_entities(parts);
+    for h in &old {
+        // The swap re-adds parts at new handles, so the record goes to the
+        // new parts; writing to stale handles is a no-op that harms nothing.
+        let _ = crate::codec::write_el(host, ocs_plugin_api::host::codec::Handle::new(*h), &record);
+    }
+    // Write the record onto the freshly added parts via a live re-scan.
+    let live = crate::codec::build_index(host.document());
+    if let Some(fresh) = live.component_by_tag(&rec.tag) {
+        for h in live.handles_for_el_id(&fresh.rec.el_id) {
+            crate::codec::write_el(host, ocs_plugin_api::host::codec::Handle::new(*h), &record);
+        }
+    }
+
+    // Re-seat wires naming this tag onto the new pins.
+    let placement = crate::cmds::attach::Placement {
+        node_id: rec.tag.clone(),
+        origin: rec.origin(),
+        rotation_deg: rec.rotation_deg,
+        kind: crate::cmds::attach::PlacementKind::Component(def.clone()),
+    };
+    let (moved, skipped) = crate::cmds::attach::reseat_wires(host, &idx, std::slice::from_ref(&placement));
+    host.bump_geometry();
+    host.set_dirty();
+    host.push_output(&format!(
+        "EL_COMPONENT: {} swapped to {}{}",
+        rec.tag,
+        def.name,
+        if moved + skipped > 0 {
+            format!("; {moved} wire(s) re-seated")
+        } else {
+            String::new()
+        },
+    ));
+    if skipped > 0 {
+        host.push_error(&format!(
+            "{skipped} wire(s) name a pin the new symbol does not have — they were left as drawn \
+             (EL_AUDIT lists them)"
+        ));
     }
 }

@@ -1004,6 +1004,69 @@ def phase_batch_and_bridge():
     s.close()
 
 
+def phase_depth_batch():
+    print("\n-- swap, PLC import, new circuits --")
+    s = session()
+    s.send({"op": "new"})
+    s.run("EL_SETTINGS TAG_FORMAT=%F%N WIREMODE=S WIRE_FORMAT=W%N WIRE_START=1")
+    s.run("EL_LADDER 20,240 WIDTH=170 SPACING=10 RUNGS=14 REF=100")
+
+    # SWAP: replace a symbol, keep the device.
+    s.run("EL_COMPONENT fuse F1 60,230")
+    s.run("EL_COMPONENT K K1 90,230")
+    s.run("EL_WIRE FROM=K1.A1 TO=F1.2")
+    before = s.count_on(COMPONENT_LAYER)
+    r = s.run("EL_COMPONENT SWAP F1 fuse-breaker")
+    check("the swap replaces in place", r.get("ok") is True, json.dumps(r)[:200])
+    s.send({"op": "save", "path": "swap.dxf"})
+    sw = read(os.path.join(WORK, "swap.dxf")).replace("\r\n", "\n")
+    check("the tag survives the swap", xdata_pair("TAG", "F1") in sw)
+    check("the new symbol is the record's", "fuse-breaker" in sw)
+    r = s.run("EL_AUDIT")
+    check("the wire re-seats on the swapped symbol", "WIRE_DANGLING" not in json.dumps(r), json.dumps(r)[:300])
+    text = s.run_and_collect("EL_COMPONENT SWAP K1 relay-coil-nope")
+    check("an unknown symbol is refused", "not in the library" in text, text[:200])
+
+    # New circuits: two-wire and star-delta.
+    s.run("EL_CIRCUIT two-wire REF=101")
+    check("two-wire places and wires", s.count_on(WIRE_LAYER) >= 2)
+    before = s.count_on(WIRE_LAYER)
+    s.run("EL_CIRCUIT star-delta REF=103")
+    check("star-delta draws its ten wires", s.count_on(WIRE_LAYER) - before == 10, f"{s.count_on(WIRE_LAYER) - before}")
+    r = s.run("EL_AUDIT")
+    check("star-delta audits clean of dangling wires", "WIRE_DANGLING" not in json.dumps(r), json.dumps(r)[:300])
+    s.close()
+
+    # PLC IMPORT: the I/O list, inverted.
+    s = session()
+    s.send({"op": "new"})
+    s.run("EL_SETTINGS TAG_FORMAT=%F%N WIREMODE=S WIRE_FORMAT=W%N WIRE_START=1")
+    s.run("EL_COMPONENT S S1 30,240")
+    s.run("EL_COMPONENT K K1 30,200")
+    s.run("EL_PLC P1 4,4 130,220")
+    io_path = os.path.join(WORK, "io-import.csv")
+    with open(io_path, "w", newline="") as fh:
+        fh.write("point,node,net\n")
+        fh.write("I1,S1.1,ESTOP\n")
+        fh.write("Q1,K1.A1,RUNC\n")
+    s.send({"op": "save", "path": "plc.dxf"})
+    r = s.run(f"EL_PLC IMPORT P1 {io_path}")
+    check("the import wires the listed points", r.get("ok") is True, json.dumps(r)[:200])
+    check("two wires landed", s.count_on(WIRE_LAYER) == 2, f"{s.count_on(WIRE_LAYER)}")
+    r = s.run("EL_AUDIT")
+    check("imported wires audit clean", "WIRE_DANGLING" not in json.dumps(r), json.dumps(r)[:300])
+    s.run("EL_WIRENO")
+    s.send({"op": "save", "path": "plc2.dxf"})
+    plc2 = read(os.path.join(WORK, "plc2.dxf")).replace("\r\n", "\n")
+    check("the net labels ride along as notes", "ESTOP" in plc2 and "RUNC" in plc2)
+    bad = os.path.join(WORK, "io-bad.csv")
+    with open(bad, "w", newline="") as fh:
+        fh.write("I99,S1.1\n")
+    text = s.run_and_collect(f"EL_PLC IMPORT P1 {bad}")
+    check("a rejected row aborts nothing-importable with the count", "rejected" in text, text[:200])
+    s.close()
+
+
 def phase_failures_and_cleanup():
     print("\n── failure reporting and cleanup ──")
     s = session()
@@ -1739,6 +1802,7 @@ def main():
     phase_titleblock()
     phase_circuit_builder()
     phase_batch_and_bridge()
+    phase_depth_batch()
     phase_failures_and_cleanup()
     phase_library()
     phase_components()

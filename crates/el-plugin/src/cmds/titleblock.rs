@@ -12,7 +12,7 @@ use ocs_plugin_api::host::HostApi;
 
 use el_core::codec::ElRecord;
 use el_core::geom::Pt;
-use el_core::model::{LAYER_TITLEBLOCK, TitleBlockRec};
+use el_core::model::TitleBlockRec;
 use el_core::ElIndex;
 
 use crate::cmds::common::{remove_handles, Args};

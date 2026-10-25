@@ -16,7 +16,7 @@ use ocs_plugin_api::host::HostApi;
 
 use el_core::codec::ElRecord;
 use el_core::model::{ElComponentRec, ElWireRec, LadderRec, LAYER_WIRES};
-use el_core::symbol::{SymbolDef, SymbolLibrary};
+use el_core::symbol::SymbolDef;
 use el_core::{tagging, ElIndex};
 
 use crate::cmds::common::Args;
@@ -148,7 +148,71 @@ const FWD_REV: Template = Template {
     ],
 };
 
-const TEMPLATES: [&Template; 3] = [&START_STOP, &DOL, &FWD_REV];
+
+/// Two-wire control: a maintained selector runs the coil through an
+/// overload's auxiliary contact — the "hand" circuit against the start/stop
+/// station's "momentary" one.
+const TWO_WIRE: Template = Template {
+    name: "two-wire",
+    description: "two-wire control: maintained selector + overload aux + coil",
+    slots: &[
+        slot("relay-coil", 88.0, 0, "K"),
+        slot("overload", 64.0, 0, "F"),
+        slot("selector-2pos", 25.0, 0, "SW"),
+        child("contact-nc", 44.0, 0, "OL", "F"),
+    ],
+    links: &[
+        link("{SW}.2", "{OL}.1"),
+        link("{OL}.2", "{K}.A1"),
+    ],
+};
+
+/// Star/delta starter control (textbook form): the main contactor seals the
+/// start, the timer runs with it, the star contactor drops out on the timer's
+/// delayed-NC and the delta contactor picks up on its delayed-NO. Power rungs
+/// are deliberately not templated — star/delta reconfigures the motor's
+/// windings, which deserves a hand-drawn power diagram.
+const STAR_DELTA: Template = Template {
+    name: "star-delta",
+    description: "star/delta starter control (timer-switched; no power rung)",
+    slots: &[
+        // Parents first: the coils and the timer.
+        slot("relay-coil", 92.0, 0, "KM1"),
+        slot("relay-coil", 92.0, 1, "KM2"),
+        slot("relay-coil", 110.0, 2, "KM3"),
+        slot("timer-coil-on", 92.0, 2, "KT"),
+        slot("pushbutton-nc", 20.0, 0, "STOP"),
+        slot("pushbutton-no", 38.0, 0, "START"),
+        child("contact-no", 54.0, 0, "SEAL1", "KM1"),
+        child("contact-no", 38.0, 1, "KM1AUX", "KM1"),
+        child("contact-nc-delayed", 54.0, 1, "KTD_NC", "KT"),
+        child("contact-no-delayed", 54.0, 2, "KTD_NO", "KT"),
+    ],
+    links: &[
+        // Main: stop → start → KM1, sealed.
+        link("{STOP}.2", "{START}.1"),
+        link("{START}.2", "{KM1}.A1"),
+        link("{SEAL1}.1", "{START}.1"),
+        link("{SEAL1}.2", "{START}.2"),
+        // Star: while the main is on and the timer has not fired.
+        link("{STOP}.2", "{KM1AUX}.1"),
+        link("{KM1AUX}.2", "{KTD_NC}.1"),
+        link("{KTD_NC}.2", "{KM2}.A1"),
+        // Delta: after the timer fires.
+        link("{KM1AUX}.2", "{KTD_NO}.1"),
+        link("{KTD_NO}.2", "{KM3}.A1"),
+        // The timer runs with the main contactor.
+        link("{KM1AUX}.2", "{KT}.A1"),
+    ],
+};
+
+const TEMPLATES: [&Template; 5] = [
+    &START_STOP,
+    &DOL,
+    &FWD_REV,
+    &TWO_WIRE,
+    &STAR_DELTA,
+];
 
 /// One placed slot, kept for link resolution: the record and its definition.
 struct Placed {

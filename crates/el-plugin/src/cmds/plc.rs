@@ -9,11 +9,128 @@
 use ocs_plugin_api::host::HostApi;
 
 use el_core::codec::ElRecord;
-use el_core::model::{LAYER_PLC, PlcRec};
+use el_core::model::PlcRec;
 
 use crate::cmds::common::{remove_handles, Args};
 use crate::geometry::plc_entities;
 use crate::hostops::parse_handle;
+
+fn lib_for(host: &mut dyn HostApi) -> el_core::symbol::SymbolLibrary {
+    crate::library::load(host).unwrap_or_default()
+}
+
+/// Run `EL_PLC IMPORT <tag> <path.csv>` — wire a module's points from a
+/// spreadsheet (textbook CH10's PLC I/O list, inverted: the PLCIO report
+/// writes this shape, import reads it back). Rows: `point,node[,net]` — the
+/// point on this module (`I3`, `Q1`), the device pin the wire reaches
+/// (`K1.A1`), and an optional net label that becomes the wire's note.
+fn import_io(
+    host: &mut dyn HostApi,
+    idx: &el_core::ElIndex,
+    lib: &el_core::symbol::SymbolLibrary,
+    a: &Args,
+) {
+    use el_core::model::LAYER_WIRES;
+    let words: Vec<String> = a.free.clone();
+    let (Some(tag), Some(path_raw)) = (words.first().cloned(), words.get(1).cloned()) else {
+        host.push_error("EL_PLC: IMPORT needs the module and a file — EL_PLC IMPORT P1 io.csv");
+        return;
+    };
+    let Some(m) = idx.plc_by_tag(&tag) else {
+        host.push_error(&format!("EL_PLC: no module tagged {tag:?} — EL_PLC places one first"));
+        return;
+    };
+    let path = crate::library::input_with_library(host, &path_raw);
+    let text = match std::fs::read_to_string(&path) {
+        Ok(t) => t,
+        Err(e) => {
+            host.push_error(&format!(
+                "EL_PLC: cannot read {} ({path_raw}): {e}",
+                path.display()
+            ));
+            return;
+        }
+    };
+
+    // Rows: point,node[,net]. A header row (point,node…) is skipped, as
+    // spreadsheets export one.
+    let mut wired = 0usize;
+    let mut errors = 0usize;
+    let mut rows: Vec<(String, [f64; 3], [f64; 3], String, String, String)> = Vec::new();
+    for (n, line) in text.lines().enumerate() {
+        let line = line.trim();
+        if line.is_empty() || line.starts_with('#') {
+            continue;
+        }
+        let cols: Vec<&str> = line.split(',').map(|c| c.trim()).collect();
+        if n == 0 && cols.first().map(|c| c.eq_ignore_ascii_case("point")).unwrap_or(false) {
+            continue;
+        }
+        if cols.len() < 2 {
+            errors += 1;
+            continue;
+        }
+        let (point, node) = (cols[0], cols[1]);
+        let net = cols.get(2).copied().unwrap_or("");
+        let Some([px, py]) = m.rec.point_position(point) else {
+            host.push_error(&format!(
+                "EL_PLC: {point:?} is not a point of {} — its points are {}",
+                m.rec.tag,
+                m.rec.point_names().join(", ")
+            ));
+            errors += 1;
+            continue;
+        };
+        match crate::cmds::wire::resolve_node(idx, lib, node, false) {
+            Ok(pt) => {
+                let (fid, fpin) = crate::cmds::wire::split_node(node);
+                rows.push((
+                    net.to_string(),
+                    [px, py, 0.0],
+                    pt,
+                    m.rec.tag.clone(),
+                    point.to_string(),
+                    format!("{fid}|{fpin}"),
+                ));
+            }
+            Err(e) => {
+                host.push_error(&format!("EL_PLC: row {n}: {node}: {e}"));
+                errors += 1;
+            }
+        }
+    }
+    if rows.is_empty() {
+        host.push_error(&format!(
+            "EL_PLC: nothing importable — {errors} row(s) rejected; rows are point,node[,net]"
+        ));
+        return;
+    }
+
+    host.push_undo(&format!("EL_PLC IMPORT {}", m.rec.tag));
+    for (net, from, to, tag, point, far) in &rows {
+        let (far_id, far_pin) = far.split_once('|').unwrap_or((far, ""));
+        let mut rec = el_core::model::ElWireRec::new(&el_core::new_el_id(), tag, far_id);
+        rec.from_pin = point.clone();
+        rec.to_pin = far_pin.to_string();
+        rec.note = net.clone();
+        let layer = if rec.wire_type.is_empty() {
+            LAYER_WIRES.to_string()
+        } else {
+            idx.wire_layer_for(&rec.wire_type)
+        };
+        let record = ElRecord::encode_wire(&rec);
+        host.add_entity(crate::geometry::wire_polyline(&record, &[*from, *to], &layer));
+        wired += 1;
+    }
+    host.bump_geometry();
+    host.set_dirty();
+    host.push_output(&format!(
+        "EL_PLC: {wired} point(s) of {} wired from {}{}",
+        m.rec.tag,
+        path.display(),
+        if errors > 0 { format!(" ({errors} row(s) rejected — see the errors)") } else { String::new() },
+    ));
+}
 
 /// Run `EL_PLC <tag> [di,do] [x,y] [BASE=I:1/] [BASEQ=] [DESC= MFG= CAT=]
 /// | EDIT <tag> [DI= DO= BASEI= BASEQ=] | LIST | CLEAR <tag|ALL>`.
@@ -34,6 +151,12 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
         Some("CLEAR") => {
             a.free.remove(0);
             clear(host, &idx, &a);
+            return;
+        }
+        Some("IMPORT") => {
+            a.free.remove(0);
+            let lib = lib_for(host);
+            import_io(host, &idx, &lib, &a);
             return;
         }
         _ => {}
@@ -141,7 +264,7 @@ fn edit(host: &mut dyn HostApi, idx: &el_core::ElIndex, a: &mut Args) {
         host.push_error("EL_PLC: EDIT needs the module — EL_PLC EDIT P1 DI=16");
         return;
     };
-    let Some(m) = idx.plc_by_tag(tag) else {
+    let Some(m) = idx.plc_by_tag(&tag) else {
         host.push_error(&format!("EL_PLC: no module tagged {tag:?}"));
         return;
     };
