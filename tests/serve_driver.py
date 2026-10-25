@@ -1067,6 +1067,64 @@ def phase_depth_batch():
     s.close()
 
 
+def phase_medium_tier():
+    print("\n-- project BOM merge, both-sides strips, mouser --")
+    s = session()
+    s.send({"op": "new"})
+    s.run("EL_SETTINGS SHEET=01 DRAWING=MAIN TAG_FORMAT=%F%N")
+    s.run("EL_COMPONENT K K1 60,220 MFG=Siemens CAT=3RT2015")
+    s.run("EL_COMPONENT Q Q1 120,220 MFG=ABB CAT=2CDS25")
+    s.run("EL_COMPONENT F F1 60,190 MFG=Siemens CAT=3RT2015")
+    s.send({"op": "save", "path": "sheet01.dxf"})
+    s.run("EL_PROJECT NEW MED")
+    s.run("EL_PROJECT SYNC")
+    s.close()
+
+    s = session()
+    s.send({"op": "new"})
+    s.run("EL_SETTINGS SHEET=02 DRAWING=CTRL TAG_FORMAT=%F%N")
+    s.run("EL_COMPONENT K K2 60,220 MFG=Siemens CAT=3RT2015")
+    s.run("EL_COMPONENT H H1 120,220 MFG=Allen+Bradley CAT=800F")
+    s.send({"op": "save", "path": "sheet02.dxf"})
+    s.run("EL_PROJECT SET SHEET=02 NAME=CTRL")
+    s.run("EL_PROJECT SYNC")
+    # The merged BOM: Siemens 3RT2015 tallies across both sheets.
+    r = s.run("EL_PROJECT BOM")
+    check("the project BOM merges", r.get("ok") is True, json.dumps(r)[:200])
+    bom = read(os.path.join(WORK, "project-bom.csv")).replace("\r\n", "\n")
+    siemens_row = [l for l in bom.split("\n") if "3RT2015" in l]
+    check("identical parts tally across sheets", siemens_row and ",3," in siemens_row[0], bom[:300])
+    check("each sheet's items contribute", "01 K1" in bom and "02 K2" in bom, bom[:300])
+    check("distinct parts stay separate rows", "2CDS25" in bom and "800F" in bom)
+    s.close()
+
+    # Both-sides strip diagram: from-ends left rail, to-ends right rail.
+    s = session()
+    s.send({"op": "new"})
+    s.run("EL_SETTINGS WIREMODE=S WIRE_FORMAT=W%N WIRE_START=1 TAG_FORMAT=%F%N")
+    s.run("EL_TERMINAL screw X1 20,150")
+    s.run("EL_TERMINAL screw X1 40,150 NO=2")
+    s.run("EL_COMPONENT K K1 20,220")
+    s.run("EL_COMPONENT K K2 120,220")
+    s.run("EL_WIRE FROM=K1.A1 TO=X1:1")
+    s.run("EL_WIRE FROM=X1:1 TO=X1:2")
+    s.run("EL_WIRE FROM=X1:2 TO=K2.A1")
+    s.run("EL_WIRENO")
+    s.run("EL_STRIP X1 20,80")
+    ents = s.send({"op": "query", "layer": STRIPS_LAYER, "limit": 60}).get("entities", [])
+    texts = [e for e in ents if e.get("type") == "MText"]
+    check("both-sides diagram draws", len(ents) >= 8, f"{len(ents)} entities")
+    s.close()
+
+    # Mouser: without a key it refuses cleanly (live search needs the env).
+    s = session()
+    s.send({"op": "new"})
+    text = s.run_and_collect("EL_CATALOG MOUSER relay")
+    mouser_refused = "MOUSER_API_KEY" in text or "failed" in text or "ok" in text
+    check("mouser responds (live if key set, refused if not)", mouser_refused, text[:200])
+    s.close()
+
+
 def phase_failures_and_cleanup():
     print("\n── failure reporting and cleanup ──")
     s = session()
@@ -1803,6 +1861,7 @@ def main():
     phase_circuit_builder()
     phase_batch_and_bridge()
     phase_depth_batch()
+    phase_medium_tier()
     phase_failures_and_cleanup()
     phase_library()
     phase_components()

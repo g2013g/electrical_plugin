@@ -388,6 +388,11 @@ pub struct StripCell {
     pub number: String,
     /// Wire numbers landing on this terminal, as they will read on the sheet.
     pub wires: Vec<String>,
+    /// The **both-sides** view: wires whose from-end lands here (the left
+    /// rail of the terminal). `wires` remains the combined list.
+    pub wires_left: Vec<String>,
+    /// Wires whose to-end lands here (the right rail).
+    pub wires_right: Vec<String>,
     /// The terminal's partition group, if any.
     pub partition: String,
     /// Bridged to the next cell.
@@ -436,14 +441,35 @@ pub fn strip_plot_entities(
             parts.push(e);
         }
 
-        // The wires that reach this terminal, above.
-        if !cell.wires.is_empty() {
-            let text = cell.wires.join(",");
-            let mut m = label(&text, [x + CELL_W / 2.0, at[1] + CELL_H + 1.2, at[2]], 1.6, LAYER_STRIPS);
+        // The both-sides view: from-end wires above the left half, to-end
+        // wires above the right half, and a centre rail through the box —
+        // the ACADE terminal plan's per-terminal left/right drawing.
+        if !cell.wires_left.is_empty() {
+            let text = cell.wires_left.join(",");
+            let mut m = label(&text, [x + CELL_W * 0.25, at[1] + CELL_H + 1.2, at[2]], 1.6, LAYER_STRIPS);
             m.attachment_point = AttachmentPoint::BottomCenter;
             let mut e = EntityType::MText(Box::new(m));
             attach(record, e.common_mut());
             parts.push(e);
+        }
+        if !cell.wires_right.is_empty() {
+            let text = cell.wires_right.join(",");
+            let mut m = label(&text, [x + CELL_W * 0.75, at[1] + CELL_H + 1.2, at[2]], 1.6, LAYER_STRIPS);
+            m.attachment_point = AttachmentPoint::BottomCenter;
+            let mut e = EntityType::MText(Box::new(m));
+            attach(record, e.common_mut());
+            parts.push(e);
+        }
+        // The centre rail splitting the terminal into its two sides.
+        {
+            let mut rail = LwPolyline::from_points(vec![
+                Vector2::new(x + CELL_W / 2.0, at[1]),
+                Vector2::new(x + CELL_W / 2.0, at[1] + CELL_H),
+            ]);
+            rail.elevation = at[2];
+            rail.common.layer = LAYER_STRIPS.to_string();
+            attach(record, &mut rail.common);
+            parts.push(EntityType::LwPolyline(rail));
         }
 
         // The partition group, below.

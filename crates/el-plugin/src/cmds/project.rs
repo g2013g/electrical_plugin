@@ -88,6 +88,7 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
         Some("SET") => set(host, &idx, &a, existing),
         Some("SYNC") => sync(host, &idx, existing),
         Some("CHECK") => check(host, existing.as_ref()),
+        Some("BOM") => bom(host, existing.as_ref()),
         Some("PATH") => match path_of(host) {
             Some(p) => host.push_output(&format!(
                 "EL_PROJECT: {}{}",
@@ -170,6 +171,58 @@ fn report_conflicts(host: &mut dyn HostApi, p: &Project) {
         "EL_PROJECT: {} cross-sheet collision(s) — EL_PROJECT CHECK lists them",
         tag_conflicts.len() + wire_conflicts.len()
     ));
+}
+
+
+/// `EL_PROJECT BOM [path.csv]` — the project-wide BOM, merged from every
+/// sheet's extract. Identical (mfg, cat) pairs tally; sheets and tags name
+/// the contributors; un-catalogued devices land in their own rows so the
+/// merge never silently drops a device.
+fn bom(host: &mut dyn HostApi, project: Option<&Project>) {
+    let Some(p) = project else {
+        host.push_error("EL_PROJECT: no project to merge — EL_PROJECT NEW first, and every sheet SYNCs");
+        return;
+    };
+    let rows = p.merged_bom();
+    if rows.is_empty() {
+        host.push_error(
+            "EL_PROJECT: no catalog data in the register — assign MFG=/CAT= and re-run SYNC on              each sheet",
+        );
+        return;
+    }
+    let mut text = String::from("mfg,part,description,qty,sheets
+");
+    let mut total = 0;
+    for r in &rows {
+        total += r.qty;
+        text.push_str(&format!(
+            "{},{},{},{},\"{}\"
+",
+            csv_cell(&r.mfg),
+            csv_cell(&r.cat),
+            csv_cell(&r.description),
+            r.qty,
+            csv_cell(&r.tags.join(" ")),
+        ));
+    }
+    let target = crate::library::output(host, "project-bom.csv");
+    match std::fs::write(&target, text) {
+        Ok(()) => host.push_output(&format!(
+            "EL_PROJECT BOM: {} line(s), {total} item(s) across {} sheet(s) — {}",
+            rows.len(),
+            p.extracts.len(),
+            target.display()
+        )),
+        Err(e) => host.push_error(&format!("EL_PROJECT BOM: cannot write {}: {e}", target.display())),
+    }
+}
+
+fn csv_cell(s: &str) -> String {
+    if s.contains(',') || s.contains('"') {
+        format!("\"{}\"", s.replace('"', "\"\"\""))
+    } else {
+        s.to_string()
+    }
 }
 
 /// `EL_PROJECT CHECK` — name every cross-sheet tag and wire-number collision.
@@ -335,7 +388,23 @@ fn sync(host: &mut dyn HostApi, idx: &el_core::ElIndex, existing: Option<Project
         .collect();
     wire_numbers.sort();
     wire_numbers.dedup();
+    // Catalog per parent tag, so the register can merge a project-wide BOM
+    // without opening another drawing.
+    let items = idx
+        .components
+        .values()
+        .filter(|c| !c.rec.is_child && !c.rec.tag.is_empty())
+        .map(|c| el_core::project::ExtractItem {
+            tag: c.rec.tag.clone(),
+            mfg: c.rec.mfg.clone(),
+            cat: c.rec.cat.clone(),
+            description: c.rec.description.clone(),
+        })
+        .collect();
     project.sync_extract(&sheet, tags, wire_numbers);
+    if let Some(e) = project.extracts.iter_mut().find(|e| e.sheet == sheet) {
+        e.items = items;
+    }
 
     match save(host, &project) {
         Ok(p) => host.push_output(&format!(

@@ -13,6 +13,7 @@ pub mod drc;
 pub mod geom;
 pub mod index;
 pub mod model;
+pub mod mouser;
 pub mod net;
 pub mod numbering;
 pub mod paths;

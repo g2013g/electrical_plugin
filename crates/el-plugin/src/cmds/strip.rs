@@ -185,11 +185,36 @@ fn build_cells(idx: &ElIndex, strip: &str) -> Vec<crate::geometry::StripCell> {
         .filter(|j| j.rec.strip.eq_ignore_ascii_case(strip))
         .collect();
 
+    // The both-sides split: a wire's from-end is the left rail, its to-end
+    // the right — the direction the circuit reads through the strip.
+    let mut wires_left: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+    let mut wires_right: std::collections::BTreeMap<String, Vec<String>> = Default::default();
+    for w in idx.wires.values() {
+        if w.rec.wire_ref.is_empty() {
+            continue;
+        }
+        if !w.rec.from_id.trim().is_empty() {
+            wires_left
+                .entry(w.rec.from_id.clone())
+                .or_default()
+                .push(w.rec.wire_ref.clone());
+        }
+        if !w.rec.to_id.trim().is_empty() {
+            wires_right
+                .entry(w.rec.to_id.clone())
+                .or_default()
+                .push(w.rec.wire_ref.clone());
+        }
+    }
+
     let mut cells: Vec<crate::geometry::StripCell> = Vec::new();
     for t in &terminals {
+        let d = t.rec.designator();
         cells.push(crate::geometry::StripCell {
             number: t.rec.number.clone(),
-            wires: wires.get(&t.rec.designator()).cloned().unwrap_or_default(),
+            wires: wires.get(&d).cloned().unwrap_or_default(),
+            wires_left: wires_left.get(&d).cloned().unwrap_or_default(),
+            wires_right: wires_right.get(&d).cloned().unwrap_or_default(),
             partition: t.rec.partition.clone(),
             jumper_right: false,
             divider_right: false,

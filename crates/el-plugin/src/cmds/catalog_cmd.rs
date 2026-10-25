@@ -28,6 +28,10 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
         "SEARCH" | "FIND" => search(host, &a),
         "FAMILY" => family(host, &a),
         "ASSIGN" | "SET" => assign(host, &mut a),
+        "MOUSER" => {
+            a.free.remove(0);
+            mouser(host, &a);
+        }
         "CLEAR" | "UNASSIGN" => clear_assignment(host, &a),
         "PATH" => {
             host.push_output(&format!(
@@ -165,6 +169,108 @@ fn family(host: &mut dyn HostApi, a: &Args) {
 /// A component's part number *is* its `cat`, so the triple written here is
 /// manufacturer, catalogue number and assembly code — the same three ACADE
 /// resolves a BOM line from.
+
+// ── Mouser live search (ported from the wiring-harness plugin) ────────────
+//
+// The transport seam (`el_core::mouser`) is mock-tested; live search needs
+// `MOUSER_API_KEY` in the environment and never touches disk keys. Hits are
+// numbered and cached session-side; `EL_CATALOG ADD <n> <tag>` writes the
+// pick's manufacturer + part number onto a placed device — the catalog trio
+// ACADE requires before a BOM can list it.
+
+static MOUSER_HITS: std::sync::Mutex<Vec<el_core::mouser::PartHit>> =
+    std::sync::Mutex::new(Vec::new());
+
+fn mouser(host: &mut dyn HostApi, a: &Args) {
+    use el_core::mouser::{self, MouserKey};
+
+    // ADD <n> <tag>: land the numbered pick on a device.
+    let words: Vec<String> = a.free.clone();
+    if let Some(first) = words.first() {
+        if first.eq_ignore_ascii_case("ADD") {
+            let (Some(n), Some(tag)) = (words.get(1), words.get(2)) else {
+                host.push_error(
+                    "EL_CATALOG: ADD needs the hit number and the device — EL_CATALOG ADD 2 K1",
+                );
+                return;
+            };
+            let Ok(n) = n.parse::<usize>() else {
+                host.push_error("EL_CATALOG: ADD's first argument is the hit number");
+                return;
+            };
+            let hits = MOUSER_HITS.lock().map(|h| h.clone()).unwrap_or_default();
+            let Some(hit) = hits.get(n.saturating_sub(1)) else {
+                host.push_error(&format!(
+                    "EL_CATALOG: no hit #{n} — the last search's hits are 1 … {}",
+                    hits.len()
+                ));
+                return;
+            };
+            // Assign through the standing ASSIGN machinery: mfg + part number.
+            let idx = crate::codec::build_index(host.document());
+            if idx.parent_by_tag(tag).is_none() && idx.component_by_tag(tag).is_none() {
+                host.push_error(&format!(
+                    "EL_CATALOG: nothing tagged {tag:?} is placed — a pick lands on a device"
+                ));
+                return;
+            }
+            let cat = if hit.mpn.is_empty() { &hit.mouser_pn } else { &hit.mpn };
+            let mut kv: Vec<String> = vec![
+                format!("MFG={}", hit.manufacturer),
+                format!("CAT={cat}"),
+            ];
+            if !hit.description.is_empty() {
+                // `+` for spaces: the tokenizer splits on whitespace.
+                kv.push(format!("DESC={}", hit.description.replace(' ', "+")));
+            }
+            let refs: Vec<&str> = kv.iter().map(|s| s.as_str()).collect();
+            // ASSIGN <tag> MFG=… CAT=…
+            let mut call: Vec<&str> = vec!["ASSIGN", tag];
+            call.extend(refs);
+            crate::cmds::catalog_cmd::run(host, &call);
+            return;
+        }
+    }
+
+    // Search: MOUSER <query>.
+    let query = words.join(" ");
+    if query.trim().is_empty() {
+        host.push_error("EL_CATALOG: MOUSER needs a query — EL_CATALOG MOUSER 24VDC relay");
+        return;
+    }
+    let key = match MouserKey::from_env() {
+        Ok(k) => k,
+        Err(e) => {
+            host.push_error(&format!("EL_CATALOG: {e}"));
+            return;
+        }
+    };
+    match mouser::search(&key, &query, 8) {
+        Ok(hits) => {
+            if let Ok(mut g) = MOUSER_HITS.lock() {
+                *g = hits.clone();
+            }
+            host.push_output(&format!(
+                "EL_CATALOG: {} Mouser hit(s) for {query:?} — EL_CATALOG ADD <n> <tag> assigns one",
+                hits.len()
+            ));
+            for (i, h) in hits.iter().enumerate() {
+                host.push_output(&format!(
+                    "  {:>2}. {} {} — {}",
+                    i + 1,
+                    h.manufacturer,
+                    if h.mpn.is_empty() { &h.mouser_pn } else { &h.mpn },
+                    h.description
+                ));
+            }
+            if hits.is_empty() {
+                host.push_error("EL_CATALOG: nothing matched — try a broader query");
+            }
+        }
+        Err(e) => host.push_error(&format!("EL_CATALOG: Mouser search failed: {e:?}")),
+    }
+}
+
 fn assign(host: &mut dyn HostApi, a: &mut Args) {
     let Some(item) = a
         .free

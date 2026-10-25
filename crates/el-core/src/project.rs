@@ -62,6 +62,34 @@ pub struct SheetExtract {
     /// The sheet's wire numbers.
     #[serde(default)]
     pub wire_numbers: Vec<String>,
+    /// Per-tag catalog data (tag, mfr, part number, description), so a
+    /// **project-wide BOM** can be merged from the register without opening
+    /// another drawing. Additive: an older register without it still opens.
+    #[serde(default)]
+    pub items: Vec<ExtractItem>,
+}
+
+/// One device's catalog identity in a sheet's extract.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct ExtractItem {
+    pub tag: String,
+    #[serde(default)]
+    pub mfg: String,
+    #[serde(default)]
+    pub cat: String,
+    #[serde(default)]
+    pub description: String,
+}
+
+/// One merged row of the project-wide BOM.
+#[derive(Debug, Clone, PartialEq, Serialize, Deserialize)]
+pub struct MergedBomRow {
+    pub mfg: String,
+    pub cat: String,
+    pub description: String,
+    pub qty: i32,
+    /// `sheet tag` per contributing device, in extract order.
+    pub tags: Vec<String>,
 }
 
 /// The project file.
@@ -178,11 +206,46 @@ impl Project {
             sheet: sheet.to_string(),
             tags,
             wire_numbers,
+            items: Vec::new(),
         };
         match self.extracts.iter_mut().find(|e| e.sheet == sheet) {
             Some(e) => *e = extract,
             None => self.extracts.push(extract),
         }
+    }
+
+    /// The project-wide bill of materials, merged from every sheet's
+    /// extract: identical (mfg, cat) pairs tally into one row with the
+    /// sheets and tags that ordered them; an item with no catalog lands in
+    /// its own row so the merge never silently drops a device.
+    pub fn merged_bom(&self) -> Vec<MergedBomRow> {
+        let mut rows: Vec<MergedBomRow> = Vec::new();
+        for e in &self.extracts {
+            for item in &e.items {
+                let key = (item.mfg.to_ascii_uppercase(), item.cat.to_ascii_uppercase());
+                match rows
+                    .iter_mut()
+                    .find(|r| r.mfg.eq_ignore_ascii_case(&item.mfg)
+                        && r.cat.eq_ignore_ascii_case(&item.cat)
+                        && !item.cat.is_empty())
+                {
+                    Some(row) => {
+                        row.qty += 1;
+                        row.tags.push(format!("{} {}", e.sheet, item.tag));
+                    }
+                    None => rows.push(MergedBomRow {
+                        mfg: item.mfg.clone(),
+                        cat: item.cat.clone(),
+                        description: item.description.clone(),
+                        qty: 1,
+                        tags: vec![format!("{} {}", e.sheet, item.tag)],
+                    }),
+                }
+                let _ = key;
+            }
+        }
+        rows.sort_by(|a, b| a.mfg.cmp(&b.mfg).then(a.cat.cmp(&b.cat)));
+        rows
     }
 
     /// Device tags carried by more than one sheet: `(tag, sheets)`, sorted.
