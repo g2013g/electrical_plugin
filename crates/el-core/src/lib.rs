@@ -7,6 +7,7 @@
 //! between [`codec::ElRecord`] and the host's `ExtendedDataRecord`.
 
 pub mod catalog;
+pub mod circuit_template;
 pub mod codec;
 pub mod csv;
 pub mod drc;

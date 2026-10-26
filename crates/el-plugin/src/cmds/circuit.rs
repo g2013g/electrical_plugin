@@ -214,6 +214,128 @@ const TEMPLATES: [&Template; 5] = [
     &STAR_DELTA,
 ];
 
+/// An owned template: what the placement loop actually runs. Both the
+/// built-in table and an authored `el-circuits.csv` produce one.
+struct Spec {
+    name: String,
+    description: String,
+    slots: Vec<SpecSlot>,
+    links: Vec<(String, String)>,
+    /// Authored templates report themselves in LIST.
+    authored: bool,
+}
+
+struct SpecSlot {
+    symbol: String,
+    dx: f64,
+    rung: i32,
+    key: String,
+    parent: Option<String>,
+}
+
+impl From<&&Template> for Spec {
+    fn from(t: &&Template) -> Self {
+        Spec {
+            name: t.name.to_string(),
+            description: t.description.to_string(),
+            slots: t
+                .slots
+                .iter()
+                .map(|s| SpecSlot {
+                    symbol: s.symbol.to_string(),
+                    dx: s.dx,
+                    rung: s.rung,
+                    key: s.key.to_string(),
+                    parent: s.parent.map(|p| p.to_string()),
+                })
+                .collect(),
+            links: t.links.iter().map(|l| (l.from.to_string(), l.to.to_string())).collect(),
+            authored: false,
+        }
+    }
+}
+
+impl From<&el_core::circuit_template::CircuitTemplate> for Spec {
+    fn from(t: &el_core::circuit_template::CircuitTemplate) -> Self {
+        Spec {
+            name: t.name.clone(),
+            description: t.description.clone(),
+            slots: t
+                .slots
+                .iter()
+                .map(|s| SpecSlot {
+                    symbol: s.symbol.clone(),
+                    dx: s.dx,
+                    rung: s.rung,
+                    key: s.key.clone(),
+                    parent: s.parent.clone(),
+                })
+                .collect(),
+            links: t.links.clone(),
+            authored: true,
+        }
+    }
+}
+
+/// Authored templates: `el-circuits.csv`, drawing folder first, then beside
+/// the symbol library, then the shared config folder — the same resolution
+/// ladder the symbol library walks. A malformed file is an error, not a
+/// silent skip: an authoring typo must be visible.
+/// Authored templates plus, when the file exists but is broken, the error.
+///
+/// A broken authoring file must never take the built-ins down with it: the
+/// error is returned alongside whatever parsed, and callers decide — a
+/// built-in still runs (with the error surfaced), an authored miss reports
+/// the error instead of a bare "no circuit".
+fn authored_templates(host: &dyn HostApi) -> (Vec<Spec>, Option<String>) {
+    use el_core::circuit_template;
+    let mut candidates: Vec<std::path::PathBuf> = Vec::new();
+    if let Some(dir) = crate::library::drawing_dir(host) {
+        candidates.push(dir.join("el-circuits.csv"));
+    }
+    let (lib_path, _) = crate::library::library_target(host);
+    if let Some(dir) = lib_path.parent() {
+        candidates.push(dir.join("el-circuits.csv"));
+    }
+    if let Some(appdata) = std::env::var_os("APPDATA") {
+        candidates.push(
+            std::path::PathBuf::from(appdata)
+                .join("OpenCADStudio")
+                .join("el-circuits.csv"),
+        );
+    }
+    let mut out = Vec::new();
+    for c in candidates {
+        if !c.exists() {
+            continue;
+        }
+        let parsed = std::fs::read_to_string(&c)
+            .map_err(|e| format!("{}: {e}", c.display()))
+            .and_then(|text| {
+                circuit_template::parse_templates(&text)
+                    .map_err(|e| format!("{}: {e}", c.display()))
+            });
+        return match parsed {
+            Ok(templates) => {
+                out.extend(templates.into_iter().map(|t| Spec::from(&t)));
+                (out, None)
+            }
+            Err(e) => (out, Some(e)),
+        };
+    }
+    (out, None)
+}
+
+/// Every template a drawing can build: built-ins first, then authored, plus
+/// the authoring error if the file exists but is broken.
+fn all_templates(host: &dyn HostApi) -> (Vec<Spec>, Option<String>) {
+    let mut out: Vec<Spec> = TEMPLATES.iter().map(|t| Spec::from(t)).collect();
+    let (authored, error) = authored_templates(host);
+    out.extend(authored);
+    (out, error)
+}
+
+
 /// One placed slot, kept for link resolution: the record and its definition.
 struct Placed {
     rec: ElComponentRec,
@@ -230,13 +352,20 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
         return;
     }
     let name = a.first_word().unwrap().to_ascii_lowercase();
-    let Some(t) = TEMPLATES.iter().find(|t| t.name == name) else {
-        host.push_error(&format!(
-            "EL_CIRCUIT: no circuit named {name:?} — try {}",
-            TEMPLATES.iter().map(|t| t.name).collect::<Vec<_>>().join(", ")
-        ));
+    let (all, authoring_error) = all_templates(host);
+    let Some(spec) = all.iter().find(|t| t.name == name) else {
+        // A broken authored file is the more useful answer when it exists.
+        if let Some(e) = authoring_error {
+            host.push_error(&format!("EL_CIRCUIT: the authoring file is broken: {e}"));
+        } else {
+            host.push_error(&format!(
+                "EL_CIRCUIT: no circuit named {name:?} — try {}",
+                all.iter().map(|t| t.name.as_str()).collect::<Vec<_>>().join(", ")
+            ));
+        }
         return;
     };
+    let t = spec;
 
     let lib = match crate::library::load(host) {
         Ok(l) => l,
@@ -257,14 +386,14 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
 
     // key → placed slot. Parents precede their children in every template,
     // so a child's parent key is always bound when it is reached.
-    let mut placed_by_key: Vec<(&'static str, Placed)> = Vec::new();
+    let mut placed_by_key: Vec<(String, Placed)> = Vec::new();
     let mut summary: Vec<String> = Vec::new();
 
-    for s in t.slots {
+    for s in &t.slots {
         // A fresh index per placement: tag allocation must see what landed.
         let idx = crate::codec::build_index(host.document());
         let settings = idx.settings_or_default();
-        let Some(def) = lib.get(s.symbol) else {
+        let Some(def) = lib.get(s.symbol.as_str()) else {
             host.push_error(&format!(
                 "EL_CIRCUIT: symbol {:?} is not in the library — EL_LIB LIST",
                 s.symbol
@@ -275,7 +404,7 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
         let y = ladder.rung_y(ri);
         let at = [ladder.origin_x + s.dx, y, 0.0];
 
-        let parent_tag = match s.parent {
+        let parent_tag = match s.parent.as_deref() {
             Some(key) => match placed_by_key.iter().find(|(k, _)| *k == key) {
                 Some((_, p)) => p.rec.tag.clone(),
                 None => {
@@ -317,7 +446,7 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
         let parts = component_entities(&record, def, &rec.tag, at, 0.0);
         host.add_entities(parts);
         let tag = rec.tag.clone();
-        placed_by_key.push((s.key, Placed { rec, def: def.clone() }));
+        placed_by_key.push((s.key.clone(), Placed { rec, def: def.clone() }));
         summary.push(format!("{tag} ({})", s.symbol));
     }
 
@@ -325,20 +454,20 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
     // sharing a tag are distinct slots, so there is never an ambiguity to
     // resolve — the registry, not a lookup, answers.
     let mut wired = 0usize;
-    for l in t.links {
-        let Some(from) = endpoint(&placed_by_key, l.from) else {
+    for l in &t.links {
+        let Some(from) = endpoint(&placed_by_key, &l.0) else {
             host.push_error(&format!(
                 "EL_CIRCUIT: template bug — {} does not resolve",
-                l.from
+                l.0
             ));
             continue;
         };
-        let Some(to) = endpoint(&placed_by_key, l.to) else {
-            host.push_error(&format!("EL_CIRCUIT: template bug — {} does not resolve", l.to));
+        let Some(to) = endpoint(&placed_by_key, &l.1) else {
+            host.push_error(&format!("EL_CIRCUIT: template bug — {} does not resolve", l.1));
             continue;
         };
-        let (fid, fpin) = split_link(l.from);
-        let (tid, tpin) = split_link(l.to);
+        let (fid, fpin) = split_link(&l.0);
+        let (tid, tpin) = split_link(&l.1);
         // The record names the slots' *tags*, not the keys: the drawing's
         // connectivity is real the moment the circuit lands.
         let from_tag = tag_of(&placed_by_key, &fid);
@@ -368,8 +497,17 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
 
 fn list(host: &mut dyn HostApi) {
     host.push_output("EL_CIRCUIT: pick a circuit (REF=<rung> anchors it)");
-    for t in TEMPLATES {
-        host.push_output(&format!("  {:<12} {}", t.name, t.description));
+    let (all, authoring_error) = all_templates(host);
+    if let Some(e) = authoring_error {
+        host.push_error(&format!("EL_CIRCUIT: the authoring file is broken: {e}"));
+    }
+    for t in &all {
+        host.push_output(&format!(
+            "  {:<14} {}{}",
+            t.name,
+            t.description,
+            if t.authored { "  [authored]" } else { "" }
+        ));
     }
 }
 
@@ -391,7 +529,7 @@ fn anchor(idx: &ElIndex, a: &Args) -> Option<(LadderRec, usize)> {
 }
 
 /// `{KEY}.pin` → the slot's pin position in the drawing.
-fn endpoint(placed: &[(&'static str, Placed)], name: &str) -> Option<[f64; 3]> {
+fn endpoint(placed: &[(String, Placed)], name: &str) -> Option<[f64; 3]> {
     let (key, pin) = split_link(name);
     let (_, p) = placed.iter().find(|(k, _)| *k == key)?;
     let pt = p.def.pin_at(&pin, p.rec.origin(), p.rec.rotation_rad())?;
@@ -399,7 +537,7 @@ fn endpoint(placed: &[(&'static str, Placed)], name: &str) -> Option<[f64; 3]> {
 }
 
 /// The tag a link's key refers to (for the wire's record).
-fn tag_of(placed: &[(&'static str, Placed)], key: &str) -> String {
+fn tag_of(placed: &[(String, Placed)], key: &str) -> String {
     placed
         .iter()
         .find(|(k, _)| *k == key)

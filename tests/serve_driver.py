@@ -1125,6 +1125,49 @@ def phase_medium_tier():
     s.close()
 
 
+def phase_template_authoring():
+    print("\n-- circuit template authoring (el-circuits.csv) --")
+    s = session()
+    s.send({"op": "new"})
+    s.run("EL_SETTINGS TAG_FORMAT=%F%N WIREMODE=S WIRE_FORMAT=W%N WIRE_START=1")
+    s.run("EL_LADDER 20,240 WIDTH=170 SPACING=10 RUNGS=10 REF=100")
+    # The drawing is saved first so the authoring CSV has a folder.
+    s.send({"op": "save", "path": "authored.dxf"})
+    csv_path = os.path.join(WORK, "el-circuits.csv")
+    with open(csv_path, "w", newline="") as fh:
+        fh.write("# my own circuits\n")
+        fh.write("NAME,my-pilot,pilot lamp off a selector\n")
+        fh.write("SLOT,SW,selector-2pos,30,0,\n")
+        fh.write("SLOT,LT,lamp,70,0,\n")
+        fh.write("LINK,{SW}.2,{LT}.1\n")
+
+    # LIST's output is GUI-only in serve, so the authored entry is proven
+    # behaviorally: the circuit runs.
+    s.run("EL_CIRCUIT LIST")
+
+    # Running it places and prewires exactly like a built-in.
+    s.run("EL_CIRCUIT my-pilot REF=100")
+    comps = s.count_on(COMPONENT_LAYER)
+    wires = s.count_on(WIRE_LAYER)
+    check("the authored circuit places its two devices", comps >= 8, f"{comps} parts")
+    check("the authored circuit prewires its link", wires == 1, f"{wires} wires")
+
+    # The wiring is real: the audit sees named ends, the coil tags allocated.
+    r = s.run("EL_AUDIT")
+    check("an authored circuit audits clean of dangling wires", "WIRE_DANGLING" not in json.dumps(r), json.dumps(r)[:300])
+    s.send({"op": "save", "path": "authored2.dxf"})
+    txt = read(os.path.join(WORK, "authored2.dxf")).replace("\r\n", "\n")
+    check("authored slots carry their allocated tags", xdata_pair("TAG", "S1") in txt and xdata_pair("TAG", "H1") in txt)
+
+    # A malformed file is an error naming the file, never a silent skip.
+    with open(csv_path, "w", newline="") as fh:
+        fh.write("NAME,broken,B\n")
+        fh.write("LINK,{A}.1,{B}.2\n")
+    text = s.run_and_collect("EL_CIRCUIT LIST")
+    check("a malformed authoring file is reported", "el-circuits.csv" in text and ("names no slot" in text or "line" in text), text[:250])
+    s.close()
+
+
 def phase_failures_and_cleanup():
     print("\n── failure reporting and cleanup ──")
     s = session()
@@ -1862,6 +1905,7 @@ def main():
     phase_batch_and_bridge()
     phase_depth_batch()
     phase_medium_tier()
+    phase_template_authoring()
     phase_failures_and_cleanup()
     phase_library()
     phase_components()
