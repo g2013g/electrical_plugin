@@ -8,19 +8,19 @@ built as an out-of-tree plugin against the host's stable `ocs_plugin_api`.
 The host is kept **pristine**. Everything lives here.
 
 ```
-host:      Open CAD Studio v2026.40.1   (plugin API 7, min supported 3)
-plugin:    opencad.electrical 0.1.3
+host:      Open CAD Studio v2026.45     (plugin API 15, min supported 3)
+plugin:    opencad.electrical 0.1.8
 prefix:    EL_            app id: OCSEL          ribbon order: 70
 ```
 
-Contract notes (host v2026.40.1): `plugin.toml` must declare `acadrust_source`
-matching the host fingerprint (the absent-passes fallback was removed), the
-build must consume the same codec rev via the checkout's `ocs_plugin_api` path
-dependency, and the build toolchain must equal the host's `rustc --version`
-token-for-token. Release-provenance warning: the v2026.40.0 Windows build
-(issue #1612) was not built from the release commit and rejects API-7 plugins —
-only v2026.40.1+ desktop builds are valid targets.
-Current ABI authority: `../ocs-wiring-harness/docs/host-capabilities-v2026.40.1.md`.
+Contract notes (host v2026.45): at plugin API >= 14 the host matches plugins
+by **wire schema** (the codec types' serde shapes) instead of compiler or codec
+fingerprints — no `rustc_version` / `acadrust_source` declarations any more,
+but the build MUST consume the same codec graph via the checkout's
+`ocs_plugin_api` path dependency pinned to the host's release tag
+(`opencaddocument@b9e1762` → `acadrust` 0.6.8@`eababc03` for v2026.45);
+upstream main is ahead of every release, so never build against HEAD.
+Current ABI authority: `../ocs-wiring-harness/docs/AGENT_HANDOFF_AND_RUNBOOK.md`.
 
 ## Layout
 

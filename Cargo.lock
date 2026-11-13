@@ -5,7 +5,7 @@ version = 4
 [[package]]
 name = "acadrust"
 version = "0.6.8"
-source = "git+https://github.com/HakanSeven12/acadrust.git?rev=53e6420#53e6420c4df4d207409798c2719d32fc6cf2811d"
+source = "git+https://github.com/hakanaktt/acadrust.git?rev=eababc03#eababc03c625eaf9cfc5169953d7ee88f2015338"
 dependencies = [
  "anyhow",
  "bitflags",
@@ -219,7 +219,7 @@ checksum = "252afb9ae5eaa683babdc6a068b3f5726eb19e05070c731f9b2a23a7c3e8ed34"
 
 [[package]]
 name = "el-core"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "serde",
  "serde_json",
@@ -229,7 +229,7 @@ dependencies = [
 
 [[package]]
 name = "el-plugin"
-version = "0.1.7"
+version = "0.1.8"
 dependencies = [
  "el-core",
  "ocs_plugin_api",
@@ -643,7 +643,7 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 [[package]]
 name = "opencaddocument"
 version = "0.1.0"
-source = "git+https://github.com/HakanSeven12/opencaddocument.git?rev=d657f94#d657f945f9d39e00548c76a8f52424881feeed1d"
+source = "git+https://github.com/HakanSeven12/opencaddocument.git?rev=b9e1762#b9e1762969f3897e67e1801a2199445b6cf83b5d"
 dependencies = [
  "acadrust",
  "serde",

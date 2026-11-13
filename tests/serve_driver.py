@@ -32,11 +32,19 @@ import sys
 import threading
 import time
 
+# Plugin messages can carry non-cp1252 glyphs; make console output lossy
+# rather than crashing the driver on encode (matches the harness driver).
+try:
+    sys.stdout.reconfigure(encoding="utf-8", errors="replace")
+    sys.stderr.reconfigure(encoding="utf-8", errors="replace")
+except (AttributeError, ValueError):
+    pass
+
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 WORK = os.path.join(ROOT, "target", "serve-test")
-# Default: the installed auto-updating desktop build (v2026.42, API 10, as of
-# 2026-10-24); override with OCS_SERVE_EXE for another host build.
+# Default: the installed auto-updating desktop build (v2026.45, API 15, as of
+# 2026-11-14); override with OCS_SERVE_EXE for another host build.
 EXE = os.environ.get(
     "OCS_SERVE_EXE",
     r"C:\Program Files\Open CAD Studio\OpenCADStudio.exe",
