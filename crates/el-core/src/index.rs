@@ -815,12 +815,11 @@ impl ElIndex {
     pub fn next_cable_tag(&self) -> String {
         let mut max = 0i32;
         for c in self.cables.values() {
-            if let Some(n) = c
+            if let Ok(n) = c
                 .rec
                 .tag
                 .trim_start_matches(|ch: char| !ch.is_ascii_digit())
                 .parse::<i32>()
-                .ok()
             {
                 max = max.max(n);
             }
@@ -1105,8 +1104,10 @@ mod tests {
 
     #[test]
     fn suggest_tag_uses_the_drawing_format() {
-        let mut s = ElSettingsRec::default();
-        s.tag_format = "%F-%N".to_string();
+        let s = ElSettingsRec {
+            tag_format: "%F-%N".to_string(),
+            ..Default::default()
+        };
         let idx = ElIndex::build(vec![
             (1, ElRecord::encode_settings(&s)),
             component(2, "K-1", "K"),
@@ -1116,8 +1117,10 @@ mod tests {
 
     #[test]
     fn tag_start_is_respected_for_a_fresh_drawing() {
-        let mut s = ElSettingsRec::default();
-        s.tag_start = 100;
+        let s = ElSettingsRec {
+            tag_start: 100,
+            ..Default::default()
+        };
         let idx = ElIndex::build(vec![(1, ElRecord::encode_settings(&s))]);
         assert_eq!(idx.next_tag_number("K"), 100);
     }

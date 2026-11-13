@@ -59,8 +59,8 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
         Err(e) => {
             host.push_error(&format!("EL_INFO: {e}"));
             let summary = drawing_summary(&cap);
-            if summary.is_some() {
-                host.push_info(&summary.unwrap());
+            if let Some(summary) = summary {
+                host.push_info(&summary);
             }
         }
     }
@@ -242,10 +242,10 @@ fn describe(cap: &Capture, handle: u64, record: &el_core::codec::ElRecord) -> St
                     pin_suffix(&w.to_pin)
                 ));
                 out.push_str(&format!("\n  type     : {}", or_dash(&w.wire_type)));
-                out.push_str(&format!("{}", {
+                out.push_str(&{
                     let g = format!("{}/{}", w.gauge, w.color);
                     format!("\n  gauge/col: {}", g.trim_matches('/'))
-                }));
+                });
                 out.push_str(&format!("\n  ntype    : {}", w.number_type.as_str()));
                 if !w.is_connected() {
                     out.push_str("\n  WARNING  : one end is unconnected");

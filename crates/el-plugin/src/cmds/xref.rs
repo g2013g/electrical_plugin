@@ -34,10 +34,7 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
         return;
     }
 
-    let groups = refresh(host, a.first_word());
-    if groups.is_empty() {
-        return;
-    }
+    refresh(host, a.first_word());
 }
 
 /// Rebuild the annotations and report what was written.

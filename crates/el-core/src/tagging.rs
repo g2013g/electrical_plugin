@@ -474,18 +474,20 @@ mod tests {
     use crate::model::ElComponentRec;
 
     fn seq() -> ElSettingsRec {
-        let mut s = ElSettingsRec::default();
-        s.tag_mode = TagMode::Sequential;
-        s.tag_format = "%F%N".to_string();
-        s.tag_start = 1;
-        s
+        ElSettingsRec {
+            tag_mode: TagMode::Sequential,
+            tag_format: "%F%N".to_string(),
+            tag_start: 1,
+            ..Default::default()
+        }
     }
 
     fn reference() -> ElSettingsRec {
-        let mut s = ElSettingsRec::default();
-        s.tag_mode = TagMode::Reference;
-        s.tag_format = "%F%N".to_string();
-        s
+        ElSettingsRec {
+            tag_mode: TagMode::Reference,
+            tag_format: "%F%N".to_string(),
+            ..Default::default()
+        }
     }
 
     fn dev(handle: u64, family: &str, rung: Option<&str>) -> TagInput {

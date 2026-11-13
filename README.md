@@ -300,11 +300,11 @@ The load gate requires `[opencad] rustc_version` in `plugin.toml` to match the
 host's own `rustc --version` **token for token**:
 
 ```bash
-rustc --version   # must be rustc 1.99.0 (b940084d7 2026-09-28)
+rustc --version   # must be rustc 1.99.1 (58cf8f9c3 2026-10-13)
 ```
 
 ```bash
-cargo test                                    # 382 tests: 296 el-core + 86 el-plugin
+cargo test                                    # 419 tests: 331 el-core + 88 el-plugin
 cargo build --release --package el-plugin
 
 DEST="$APPDATA/OpenCADStudio/plugins/opencad.electrical"
@@ -312,7 +312,7 @@ mkdir -p "$DEST"
 cp target/release/el_plugin.dll "$DEST/el_plugin.dll"
 cp crates/el-plugin/plugin.toml "$DEST/plugin.toml"
 
-python tests/serve_driver.py                  # 184 behavioural checks
+python tests/serve_driver.py                  # 303 behavioural checks
 ```
 
 Restart Open CAD Studio after deploying so Windows unmaps the old DLL. The

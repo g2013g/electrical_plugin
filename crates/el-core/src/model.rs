@@ -497,7 +497,7 @@ impl PlcRec {
     /// The address a point carries (`P1.I3` → `I0.2` — the third input is
     /// index 2, because addresses are zero-based the way a PLC numbers them).
     pub fn address_of(&self, point: &str) -> Option<String> {
-        let (rail, n) = point.split_at(1.max(point.len().min(1)));
+        let (rail, n) = point.split_at(1);
         let idx: i32 = n.parse().ok()?;
         match rail {
             "I" if idx >= 1 && idx <= self.di => Some(format!("{}{}", self.base_i, idx - 1)),
@@ -519,7 +519,7 @@ impl PlcRec {
     pub fn point_position(&self, point: &str) -> Option<[f64; 2]> {
         const ROW: f64 = 6.0;
         const W: f64 = 40.0;
-        let (rail, n) = point.split_at(1.max(point.len().min(1)));
+        let (rail, n) = point.split_at(1);
         let idx: i32 = n.parse().ok()?;
         // The taller rail sizes the box; points sit from the top.
         let rows = self.di.max(self.do_).max(1) as f64;
@@ -1557,9 +1557,11 @@ mod tests {
 
     #[test]
     fn tag_format_expands_drawing_tokens() {
-        let mut s = ElSettingsRec::default();
-        s.tag_format = "%S-%F%N".to_string();
-        s.sheet = "02".to_string();
+        let s = ElSettingsRec {
+            tag_format: "%S-%F%N".to_string(),
+            sheet: "02".to_string(),
+            ..Default::default()
+        };
         assert_eq!(s.format_tag("Q", 3), "02-Q3");
     }
 
@@ -1600,8 +1602,10 @@ mod tests {
 
     #[test]
     fn wire_number_format_uses_the_same_machinery() {
-        let mut s = ElSettingsRec::default();
-        s.wireno_format = "W%N".to_string();
+        let s = ElSettingsRec {
+            wireno_format: "W%N".to_string(),
+            ..Default::default()
+        };
         assert_eq!(s.format_wireno(42), "W42");
     }
 
@@ -1752,8 +1756,10 @@ mod tests {
 
     #[test]
     fn suffix_token_positions_the_duplicate() {
-        let mut s = ElSettingsRec::default();
-        s.wireno_format = "%N%X".to_string();
+        let s = ElSettingsRec {
+            wireno_format: "%N%X".to_string(),
+            ..Default::default()
+        };
         assert_eq!(s.format_wireno_suffixed(100, ""), "100");
         assert_eq!(s.format_wireno_suffixed(100, "A"), "100A");
     }
@@ -1762,15 +1768,19 @@ mod tests {
     fn suffix_is_appended_when_the_format_lacks_the_token() {
         // A user who simplifies the format to `%N` must still get unique
         // numbers, not silent duplicates.
-        let mut s = ElSettingsRec::default();
-        s.wireno_format = "%N".to_string();
+        let s = ElSettingsRec {
+            wireno_format: "%N".to_string(),
+            ..Default::default()
+        };
         assert_eq!(s.format_wireno_suffixed(100, "B"), "100B");
     }
 
     #[test]
     fn suffix_token_can_sit_mid_format() {
-        let mut s = ElSettingsRec::default();
-        s.wireno_format = "%N%X-1".to_string();
+        let s = ElSettingsRec {
+            wireno_format: "%N%X-1".to_string(),
+            ..Default::default()
+        };
         assert_eq!(s.format_wireno_suffixed(7, "C"), "7C-1");
     }
 
@@ -1826,7 +1836,7 @@ mod tests {
     #[test]
     fn default_table_has_an_unnumbered_ground_type() {
         let table = WireTypeTable::default();
-        assert!(table.get("GREEN-YELLOW").unwrap().numbered == false);
+        assert!(!table.get("GREEN-YELLOW").unwrap().numbered);
     }
 
     // ── ladder ───────────────────────────────────────────────────────────

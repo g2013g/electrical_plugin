@@ -55,7 +55,6 @@ fn probe_point(x: f64, y: f64, layer: &str) -> Point {
 
 /// Run `EL_PROBE [report_path] | BLOCK | BLOCKCHECK [report_path]`.
 pub fn run(host: &mut dyn HostApi, arg: Option<&str>, second: Option<&str>) {
-    eprintln!("[el] probe::run arg={arg:?} second={second:?}");
     // Re-enabled 2026-10-24 on host v2026.42 (codec 0.6.4): upstream fixed
     // the 0.6.0 entity-index crash this probe used to hit — the Insert-add
     // path and the post-add lookups both survive now. Verified live before
@@ -219,8 +218,6 @@ fn capabilities(host: &mut dyn HostApi, out_path: Option<&str>) {
     let mut probe_handles: Vec<Handle> = Vec::new();
 
     // ── 1. add_entity accepts an Insert (but does it render?) ──
-    eprintln!("[el-probe] section 1");
-    eprintln!("[el-probe] section 1 start");
     let h = host.add_entity(EntityType::Insert(Insert::new(
         SPIKE_BLOCK,
         Vector3::new(0.0, 0.0, 0.0),
@@ -241,8 +238,6 @@ fn capabilities(host: &mut dyn HostApi, out_path: Option<&str>) {
     );
 
     // ── 2. XDATA payload growth: numeric values ──
-    eprintln!("[el-probe] section 2");
-    eprintln!("[el-probe] section 2 start");
     let carrier = host.add_entity(EntityType::Point(probe_point(5.0, 5.0, "0")));
     probe_handles.push(carrier);
     let mut max_values_ok = 0usize;
@@ -278,8 +273,6 @@ fn capabilities(host: &mut dyn HostApi, out_path: Option<&str>) {
     );
 
     // ── 3. XDATA long string ──
-    eprintln!("[el-probe] section 3");
-    eprintln!("[el-probe] section 3 start");
     for len in [255usize, 4_096, 65_536, 262_144] {
         let payload = "x".repeat(len);
         let mut rec = ExtendedDataRecord::new(crate::APPID);
@@ -307,8 +300,6 @@ fn capabilities(host: &mut dyn HostApi, out_path: Option<&str>) {
     }
 
     // ── 4. Layer auto-creation ──
-    eprintln!("[el-probe] section 4");
-    eprintln!("[el-probe] section 4 start");
     let probe_layer = "EL_PROBE_LAYER";
     let lh = host.add_entity(EntityType::Point(probe_point(10.0, 10.0, probe_layer)));
     probe_handles.push(lh);

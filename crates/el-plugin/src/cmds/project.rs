@@ -107,9 +107,7 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
 
 fn show(host: &mut dyn HostApi, project: Option<&Project>) {
     let Some(p) = project else {
-        host.push_output(&format!(
-            "EL_PROJECT: no project — run EL_PROJECT NEW <name> (file would be beside the drawing)"
-        ));
+        host.push_output("EL_PROJECT: no project — run EL_PROJECT NEW <name> (file would be beside the drawing)");
         return;
     };
     host.push_output(&format!(

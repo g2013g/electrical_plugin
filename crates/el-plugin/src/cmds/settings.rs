@@ -116,7 +116,7 @@ fn apply(host: &mut dyn HostApi, args: &[&str]) {
     // Start from whatever the drawing already has so a partial set only
     // changes what was named.
     let mut rec = handle
-        .map(|h| ocs_plugin_api::host::codec::Handle::new(h))
+        .map(ocs_plugin_api::host::codec::Handle::new)
         .and_then(|h| read_el(host, h))
         .and_then(|r| r.decode_settings().ok())
         .unwrap_or_default();
@@ -286,7 +286,7 @@ mod tests {
         // grab them.
         let wire = ElRecord::encode_wire(&el_core::model::ElWireRec::new("i", "a", "b"));
         let settings = ElRecord::encode_settings(&ElSettingsRec::default());
-        let pairs = vec![(1u64, wire), (2, settings)];
+        let pairs = [(1u64, wire), (2, settings)];
         let found = pairs
             .iter()
             .find(|(_, rec)| rec.kind() == Some(KIND))

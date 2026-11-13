@@ -239,16 +239,16 @@ pub fn check(idx: &ElIndex, catalog: Option<&Catalog>) -> Vec<Issue> {
                 format!("{label} anchors to a wire that is not in this drawing"),
             ));
         }
-        if s.rec.direction == SignalDirection::Source && !s.rec.name.is_empty() {
-            if seen_sources
+        if s.rec.direction == SignalDirection::Source
+            && !s.rec.name.is_empty()
+            && seen_sources
                 .insert(s.rec.name.as_str(), s.rec.el_id.as_str())
                 .is_some()
-            {
-                issues.push(Issue::error(
-                    "DUP_SIGNAL_SOURCE",
-                    format!("signal {label} has more than one source arrow in this drawing"),
-                ));
-            }
+        {
+            issues.push(Issue::error(
+                "DUP_SIGNAL_SOURCE",
+                format!("signal {label} has more than one source arrow in this drawing"),
+            ));
         }
     }
 

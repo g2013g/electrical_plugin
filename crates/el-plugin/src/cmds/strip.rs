@@ -123,7 +123,7 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
         if old.is_empty() {
             String::new()
         } else {
-            format!(" (previous diagram replaced)")
+            " (previous diagram replaced)".to_string()
         }
     ));
 }

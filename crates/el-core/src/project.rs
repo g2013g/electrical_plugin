@@ -188,10 +188,7 @@ impl Project {
     pub fn pairing_note(&self, name: &str, is_source: bool) -> Option<String> {
         let entry = self.signal(name)?;
         if is_source {
-            match entry.dest_sheets.first() {
-                Some(s) => Some(format!("→ {s}")),
-                None => None,
-            }
+            entry.dest_sheets.first().map(|s| format!("→ {s}"))
         } else {
             match entry.source_sheet.is_empty() {
                 true => None,

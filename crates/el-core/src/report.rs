@@ -647,7 +647,6 @@ pub fn net_list(idx: &ElIndex) -> TableLayout {
 ///
 /// This is the report a drafter uses to check that a circuit is what they meant:
 /// it says what is connected to what, derived from the wires rather than from
-
 /// This drawing's own metadata and contents.
 ///
 /// AutoCAD Electrical's drawing list spans a project; with no project database
@@ -936,9 +935,11 @@ mod tests {
 
     #[test]
     fn the_drawing_list_reports_the_settings_and_contents() {
-        let mut s = ElSettingsRec::default();
-        s.sheet = "02".to_string();
-        s.drawing = "PANEL-01".to_string();
+        let s = ElSettingsRec {
+            sheet: "02".to_string(),
+            drawing: "PANEL-01".to_string(),
+            ..Default::default()
+        };
         let idx = fixture();
         let t = drawing_list(&idx, &s);
         let text = t.to_text();

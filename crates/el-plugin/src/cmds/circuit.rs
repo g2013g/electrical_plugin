@@ -329,7 +329,7 @@ fn authored_templates(host: &dyn HostApi) -> (Vec<Spec>, Option<String>) {
 /// Every template a drawing can build: built-ins first, then authored, plus
 /// the authoring error if the file exists but is broken.
 fn all_templates(host: &dyn HostApi) -> (Vec<Spec>, Option<String>) {
-    let mut out: Vec<Spec> = TEMPLATES.iter().map(|t| Spec::from(t)).collect();
+    let mut out: Vec<Spec> = TEMPLATES.iter().map(Spec::from).collect();
     let (authored, error) = authored_templates(host);
     out.extend(authored);
     (out, error)
@@ -419,7 +419,7 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
 
         let mut rec = component::build_record(
             def,
-            if def.is_child { None } else { None },
+            None,
             def.is_child,
             &parent_tag,
             &mut Args::default(),

@@ -219,7 +219,7 @@ pub fn default_cache_path() -> std::path::PathBuf {
     // Beside the EL plugin's config area (`%APPDATA%/OpenCADStudio`).
     std::env::var_os("APPDATA")
         .map(std::path::PathBuf::from)
-        .unwrap_or_else(std::path::PathBuf::new)
+        .unwrap_or_default()
         .join("OpenCADStudio")
         .join("el-mouser-cache.json")
 }
@@ -387,7 +387,7 @@ mod tests {
         // EL's consumer reads the hit fields directly (MFG/CAT per device),
         // so the mapping test is: the fields we assign from are populated.
         let hits = parse_search_response(SEARCH_OK).unwrap();
-        assert!(hits.len() >= 1);
+        assert!(!hits.is_empty());
         assert_eq!(hits[0].manufacturer, "TE Connectivity");
         assert!(!hits[0].mpn.is_empty());
     }

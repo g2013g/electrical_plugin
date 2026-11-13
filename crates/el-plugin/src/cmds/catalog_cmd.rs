@@ -164,12 +164,6 @@ fn family(host: &mut dyn HostApi, a: &Args) {
     }
 }
 
-/// Assign a part to a device, terminal or cable.
-///
-/// A component's part number *is* its `cat`, so the triple written here is
-/// manufacturer, catalogue number and assembly code — the same three ACADE
-/// resolves a BOM line from.
-
 // ── Mouser live search (ported from the wiring-harness plugin) ────────────
 //
 // The transport seam (`el_core::mouser`) is mock-tested; live search needs
@@ -271,6 +265,11 @@ fn mouser(host: &mut dyn HostApi, a: &Args) {
     }
 }
 
+/// Assign a part to a device, terminal or cable.
+///
+/// A component's part number *is* its `cat`, so the triple written here is
+/// manufacturer, catalogue number and assembly code — the same three ACADE
+/// resolves a BOM line from.
 fn assign(host: &mut dyn HostApi, a: &mut Args) {
     let Some(item) = a
         .free

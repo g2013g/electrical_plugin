@@ -2,7 +2,7 @@
 //! plus document scanning helpers shared by all commands.
 
 use ocs_plugin_api::host::codec::xdata::{ExtendedDataRecord, XDataValue};
-use ocs_plugin_api::host::codec::{CadDocument, EntityType, Handle};
+use ocs_plugin_api::host::codec::{Document, EntityType, Handle};
 use ocs_plugin_api::host::HostApi;
 
 use el_core::codec::{ElRecord, ElValue};
@@ -68,7 +68,7 @@ pub fn write_el(host: &mut dyn HostApi, handle: Handle, rec: &ElRecord) -> bool 
 ///
 /// Only `OCSEL` is ever read, so the wiring-harness plugin's records are
 /// invisible here even when both plugins are loaded.
-pub fn scan(doc: &CadDocument) -> Vec<(u64, ElRecord)> {
+pub fn scan(doc: &Document) -> Vec<(u64, ElRecord)> {
     doc.entities()
         .filter_map(|e| {
             let handle = e.common().handle;
@@ -82,7 +82,7 @@ pub fn scan(doc: &CadDocument) -> Vec<(u64, ElRecord)> {
 }
 
 /// Build the resolved electrical index from a document.
-pub fn build_index(doc: &CadDocument) -> ElIndex {
+pub fn build_index(doc: &Document) -> ElIndex {
     ElIndex::build(scan(doc))
 }
 

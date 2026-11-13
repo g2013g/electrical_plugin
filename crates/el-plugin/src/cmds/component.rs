@@ -388,100 +388,6 @@ fn snap_to_rung(idx: &ElIndex, pt: [f64; 3]) -> [f64; 3] {
     [pt[0], ladder.rec.rung_y(index), pt[2]]
 }
 
-
-
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-
-    #[test]
-    fn a_symbol_name_resolves_directly() {
-        let lib = SymbolLibrary::default();
-        assert_eq!(resolve_symbol(&lib, Some("relay-coil")).unwrap().name, "relay-coil");
-    }
-
-    #[test]
-    fn a_bare_family_code_resolves_to_its_first_parent() {
-        let lib = SymbolLibrary::default();
-        assert_eq!(resolve_symbol(&lib, Some("K")).unwrap().name, "relay-coil");
-        assert_eq!(resolve_symbol(&lib, Some("F")).unwrap().name, "fuse");
-        assert!(resolve_symbol(&lib, Some("ZZ")).is_none());
-        assert!(resolve_symbol(&lib, None).is_none());
-    }
-
-    #[test]
-    fn a_family_code_never_resolves_to_a_contact() {
-        // `EL_COMPONENT K` must place a coil, not a contact: a contact needs a
-        // parent and would be placed untagged.
-        let lib = SymbolLibrary::default();
-        for family in ["K", "S", "Q"] {
-            let d = resolve_symbol(&lib, Some(family)).unwrap();
-            assert!(!d.is_child, "{family} resolved to the child {}", d.name);
-        }
-    }
-
-    #[test]
-    fn a_record_carries_the_definitions_pins_and_ratings() {
-        let lib = SymbolLibrary::default();
-        let def = lib.get("relay-coil").unwrap();
-        let mut a = Args::parse(&[]);
-        let rec = build_record(def, None, false, "", &mut a);
-        assert_eq!(rec.family, "K");
-        assert_eq!(rec.symbol, "relay-coil");
-        assert_eq!(rec.pins, vec!["A1", "A2"]);
-        assert_eq!(rec.ratings, vec!["24VDC"]);
-        assert_eq!(rec.description, "Relay coil");
-    }
-
-    #[test]
-    fn placement_keys_override_the_definition() {
-        let lib = SymbolLibrary::default();
-        let def = lib.get("relay-coil").unwrap();
-        let mut a = Args::parse(&["DESC=K1+relay", "MFG=Siemens", "CAT=3RT", "RATING=230VAC,10A"]);
-        let rec = build_record(def, Some("K1"), false, "", &mut a);
-        assert_eq!(rec.tag, "K1");
-        assert_eq!(rec.description, "K1 relay", "a + stands in for a space");
-        assert_eq!(rec.mfg, "Siemens");
-        assert_eq!(rec.cat, "3RT");
-        assert_eq!(rec.ratings, vec!["230VAC", "10A"]);
-    }
-
-    #[test]
-    fn a_child_record_carries_its_parents_tag() {
-        let lib = SymbolLibrary::default();
-        let def = lib.get("contact-no").unwrap();
-        let mut a = Args::parse(&[]);
-        let rec = build_record(def, None, true, "K1", &mut a);
-        assert!(rec.is_child);
-        assert_eq!(rec.parent_tag, "K1");
-        // The child shows its parent's tag, so the designator is not blank.
-        assert_eq!(rec.tag, "K1");
-    }
-
-    #[test]
-    fn an_empty_tag_token_leaves_the_record_untagged() {
-        // The caller may pass `""` to mean "allocate one"; it must not become a
-        // tag of zero length that then shadows nothing.
-        let lib = SymbolLibrary::default();
-        let def = lib.get("relay-coil").unwrap();
-        let mut a = Args::parse(&[]);
-        let rec = build_record(def, Some(""), false, "", &mut a);
-        assert!(rec.tag.is_empty());
-    }
-
-    #[test]
-    fn snapping_only_moves_a_point_near_a_rung() {
-        let mut l = el_core::model::LadderRec::new("l1", [0.0, 100.0], 100.0, 10.0, 3);
-        l.first_ref = "100".to_string();
-        let idx = ElIndex::build(vec![(1, ElRecord::encode_ladder(&l))]);
-        // 100.5 is within tolerance of the first rung.
-        assert_eq!(snap_to_rung(&idx, [50.0, 100.5, 0.0]), [50.0, 100.0, 0.0]);
-        // 130 is not near any rung, so the point is left alone.
-        assert_eq!(snap_to_rung(&idx, [50.0, 130.0, 0.0]), [50.0, 130.0, 0.0]);
-    }
-}
-
 // ── swap ─────────────────────────────────────────────────────────────────
 
 /// Run `EL_COMPONENT SWAP <tag> <new-symbol> [KEEPRESET]`.
@@ -601,5 +507,96 @@ pub fn run_swap(host: &mut dyn HostApi, args: &[&str]) {
             "{skipped} wire(s) name a pin the new symbol does not have — they were left as drawn \
              (EL_AUDIT lists them)"
         ));
+    }
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn a_symbol_name_resolves_directly() {
+        let lib = SymbolLibrary::default();
+        assert_eq!(resolve_symbol(&lib, Some("relay-coil")).unwrap().name, "relay-coil");
+    }
+
+    #[test]
+    fn a_bare_family_code_resolves_to_its_first_parent() {
+        let lib = SymbolLibrary::default();
+        assert_eq!(resolve_symbol(&lib, Some("K")).unwrap().name, "relay-coil");
+        assert_eq!(resolve_symbol(&lib, Some("F")).unwrap().name, "fuse");
+        assert!(resolve_symbol(&lib, Some("ZZ")).is_none());
+        assert!(resolve_symbol(&lib, None).is_none());
+    }
+
+    #[test]
+    fn a_family_code_never_resolves_to_a_contact() {
+        // `EL_COMPONENT K` must place a coil, not a contact: a contact needs a
+        // parent and would be placed untagged.
+        let lib = SymbolLibrary::default();
+        for family in ["K", "S", "Q"] {
+            let d = resolve_symbol(&lib, Some(family)).unwrap();
+            assert!(!d.is_child, "{family} resolved to the child {}", d.name);
+        }
+    }
+
+    #[test]
+    fn a_record_carries_the_definitions_pins_and_ratings() {
+        let lib = SymbolLibrary::default();
+        let def = lib.get("relay-coil").unwrap();
+        let mut a = Args::parse(&[]);
+        let rec = build_record(def, None, false, "", &mut a);
+        assert_eq!(rec.family, "K");
+        assert_eq!(rec.symbol, "relay-coil");
+        assert_eq!(rec.pins, vec!["A1", "A2"]);
+        assert_eq!(rec.ratings, vec!["24VDC"]);
+        assert_eq!(rec.description, "Relay coil");
+    }
+
+    #[test]
+    fn placement_keys_override_the_definition() {
+        let lib = SymbolLibrary::default();
+        let def = lib.get("relay-coil").unwrap();
+        let mut a = Args::parse(&["DESC=K1+relay", "MFG=Siemens", "CAT=3RT", "RATING=230VAC,10A"]);
+        let rec = build_record(def, Some("K1"), false, "", &mut a);
+        assert_eq!(rec.tag, "K1");
+        assert_eq!(rec.description, "K1 relay", "a + stands in for a space");
+        assert_eq!(rec.mfg, "Siemens");
+        assert_eq!(rec.cat, "3RT");
+        assert_eq!(rec.ratings, vec!["230VAC", "10A"]);
+    }
+
+    #[test]
+    fn a_child_record_carries_its_parents_tag() {
+        let lib = SymbolLibrary::default();
+        let def = lib.get("contact-no").unwrap();
+        let mut a = Args::parse(&[]);
+        let rec = build_record(def, None, true, "K1", &mut a);
+        assert!(rec.is_child);
+        assert_eq!(rec.parent_tag, "K1");
+        // The child shows its parent's tag, so the designator is not blank.
+        assert_eq!(rec.tag, "K1");
+    }
+
+    #[test]
+    fn an_empty_tag_token_leaves_the_record_untagged() {
+        // The caller may pass `""` to mean "allocate one"; it must not become a
+        // tag of zero length that then shadows nothing.
+        let lib = SymbolLibrary::default();
+        let def = lib.get("relay-coil").unwrap();
+        let mut a = Args::parse(&[]);
+        let rec = build_record(def, Some(""), false, "", &mut a);
+        assert!(rec.tag.is_empty());
+    }
+
+    #[test]
+    fn snapping_only_moves_a_point_near_a_rung() {
+        let mut l = el_core::model::LadderRec::new("l1", [0.0, 100.0], 100.0, 10.0, 3);
+        l.first_ref = "100".to_string();
+        let idx = ElIndex::build(vec![(1, ElRecord::encode_ladder(&l))]);
+        // 100.5 is within tolerance of the first rung.
+        assert_eq!(snap_to_rung(&idx, [50.0, 100.5, 0.0]), [50.0, 100.0, 0.0]);
+        // 130 is not near any rung, so the point is left alone.
+        assert_eq!(snap_to_rung(&idx, [50.0, 130.0, 0.0]), [50.0, 130.0, 0.0]);
     }
 }

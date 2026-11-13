@@ -387,6 +387,9 @@ pub const LAYER_STRIPS: &str = el_core::model::LAYER_STRIPS;
 pub struct StripCell {
     pub number: String,
     /// Wire numbers landing on this terminal, as they will read on the sheet.
+    // Report payload, populated per cell; the render splits it into
+    // wires_left/wires_right and the combined list stays for consumers.
+    #[allow(dead_code)]
     pub wires: Vec<String>,
     /// The **both-sides** view: wires whose from-end lands here (the left
     /// rail of the terminal). `wires` remains the combined list.
@@ -482,21 +485,19 @@ pub fn strip_plot_entities(
         }
 
         // A jumper to the next cell arcs over the shared edge.
-        if cell.jumper_right {
-            if i + 1 < cells.len() {
-                let x1 = x + CELL_W;
-                let verts = vec![
-                    Vector2::new(x1 - 2.0, at[1] + CELL_H),
-                    Vector2::new(x1, at[1] + CELL_H + 2.5),
-                    Vector2::new(x1 + 2.0, at[1] + CELL_H),
-                ];
-                let mut arc = LwPolyline::from_points(verts);
-                arc.elevation = at[2];
-                arc.common.layer = LAYER_STRIPS.to_string();
-                arc.common.color = Color::Index(1);
-                attach(record, &mut arc.common);
-                parts.push(EntityType::LwPolyline(arc));
-            }
+        if cell.jumper_right && i + 1 < cells.len() {
+            let x1 = x + CELL_W;
+            let verts = vec![
+                Vector2::new(x1 - 2.0, at[1] + CELL_H),
+                Vector2::new(x1, at[1] + CELL_H + 2.5),
+                Vector2::new(x1 + 2.0, at[1] + CELL_H),
+            ];
+            let mut arc = LwPolyline::from_points(verts);
+            arc.elevation = at[2];
+            arc.common.layer = LAYER_STRIPS.to_string();
+            arc.common.color = Color::Index(1);
+            attach(record, &mut arc.common);
+            parts.push(EntityType::LwPolyline(arc));
         }
 
         // A partition boundary is a doubled line on the shared edge.
@@ -942,11 +943,11 @@ pub fn table_entities(
     y -= row_pitch * 0.5;
 
     for r in 0..layout.row_count() {
-        for c in 0..layout.col_count() {
+        for (c, cx) in col_x.iter().enumerate() {
             let cell = layout.cell(r, c);
             parts.push(EntityType::MText(Box::new(label(
                 cell.trim_end(),
-                [at[0] + col_x[c], y, at[2]],
+                [at[0] + cx, y, at[2]],
                 text_height,
                 layer,
             ))));
@@ -988,55 +989,6 @@ fn rule(x1: f64, y1: f64, x2: f64, y2: f64, z: f64, layer: &str) -> EntityType {
 pub fn table_height(layout: &el_core::tables::TableLayout, text_height: f64) -> f64 {
     let rows = layout.row_count() as f64 + if layout.title.is_empty() { 1.5 } else { 3.0 };
     rows * text_height * 1.7
-}
-
-#[cfg(test)]
-mod tests {
-    use super::*;
-    use el_core::model::{ElSettingsRec, KIND_SETTINGS};
-
-    #[test]
-    fn rotate_vec_is_identity_at_zero() {
-        assert_eq!(rotate_vec([3.0, 4.0], 0.0), [3.0, 4.0]);
-    }
-
-    #[test]
-    fn rotate_vec_quarter_turn_maps_x_to_y() {
-        let r = rotate_vec([1.0, 0.0], std::f64::consts::FRAC_PI_2);
-        assert!((r[0]).abs() < 1e-9);
-        assert!((r[1] - 1.0).abs() < 1e-9);
-    }
-
-    #[test]
-    fn carrier_anchor_reads_a_point() {
-        let e = EntityType::Point(Point::at(Vector3::new(5.0, 6.0, 0.0)));
-        assert_eq!(carrier_anchor(&e), Some([5.0, 6.0, 0.0]));
-    }
-
-    #[test]
-    fn translate_moves_a_point() {
-        let mut e = EntityType::Point(Point::at(Vector3::new(1.0, 2.0, 0.0)));
-        translate_entity(&mut e, [10.0, -1.0, 0.0]);
-        assert_eq!(carrier_anchor(&e), Some([11.0, 1.0, 0.0]));
-    }
-
-    #[test]
-    fn meta_carrier_carries_its_record_on_the_meta_layer() {
-        let rec = ElRecord::encode_settings(&ElSettingsRec::default());
-        let e = meta_carrier(&rec);
-        assert_eq!(e.common().layer, META_LAYER);
-        let decoded = crate::codec::record_of(&e).expect("record embedded before handoff");
-        assert_eq!(decoded.kind(), Some(KIND_SETTINGS));
-    }
-
-    #[test]
-    fn label_disables_wrapping() {
-        // A wrapped label is one of the most visible possible defects: every
-        // ref-des containing a space would break onto two lines.
-        let m = label("K1 CONTACT", [0.0, 0.0, 0.0], 2.5, "EL_TAGS");
-        assert_eq!(m.rectangle_width, 0.0);
-        assert_eq!(m.style, "Standard");
-    }
 }
 
 // ── panel footprints ─────────────────────────────────────────────────────
@@ -1300,4 +1252,53 @@ pub fn titleblock_entities(
         parts.push(e);
     }
     parts
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use el_core::model::{ElSettingsRec, KIND_SETTINGS};
+
+    #[test]
+    fn rotate_vec_is_identity_at_zero() {
+        assert_eq!(rotate_vec([3.0, 4.0], 0.0), [3.0, 4.0]);
+    }
+
+    #[test]
+    fn rotate_vec_quarter_turn_maps_x_to_y() {
+        let r = rotate_vec([1.0, 0.0], std::f64::consts::FRAC_PI_2);
+        assert!((r[0]).abs() < 1e-9);
+        assert!((r[1] - 1.0).abs() < 1e-9);
+    }
+
+    #[test]
+    fn carrier_anchor_reads_a_point() {
+        let e = EntityType::Point(Point::at(Vector3::new(5.0, 6.0, 0.0)));
+        assert_eq!(carrier_anchor(&e), Some([5.0, 6.0, 0.0]));
+    }
+
+    #[test]
+    fn translate_moves_a_point() {
+        let mut e = EntityType::Point(Point::at(Vector3::new(1.0, 2.0, 0.0)));
+        translate_entity(&mut e, [10.0, -1.0, 0.0]);
+        assert_eq!(carrier_anchor(&e), Some([11.0, 1.0, 0.0]));
+    }
+
+    #[test]
+    fn meta_carrier_carries_its_record_on_the_meta_layer() {
+        let rec = ElRecord::encode_settings(&ElSettingsRec::default());
+        let e = meta_carrier(&rec);
+        assert_eq!(e.common().layer, META_LAYER);
+        let decoded = crate::codec::record_of(&e).expect("record embedded before handoff");
+        assert_eq!(decoded.kind(), Some(KIND_SETTINGS));
+    }
+
+    #[test]
+    fn label_disables_wrapping() {
+        // A wrapped label is one of the most visible possible defects: every
+        // ref-des containing a space would break onto two lines.
+        let m = label("K1 CONTACT", [0.0, 0.0, 0.0], 2.5, "EL_TAGS");
+        assert_eq!(m.rectangle_width, 0.0);
+        assert_eq!(m.style, "Standard");
+    }
 }

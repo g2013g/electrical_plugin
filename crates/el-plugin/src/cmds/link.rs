@@ -200,15 +200,13 @@ fn resolve_component(capture: &Capture, token: &str) -> Option<u64> {
             }
         }
     }
-    if let Some(pinned) = state::resolve_sel_token(token) {
-        if let Some(handle) = pinned {
-            if capture.index.component_of_handle(handle).is_some() {
-                return Some(handle);
-            }
-            if let Some(carrier) = capture.carrier_of(Handle::new(handle)) {
-                if capture.index.component_of_handle(carrier).is_some() {
-                    return Some(carrier);
-                }
+    if let Some(Some(handle)) = state::resolve_sel_token(token) {
+        if capture.index.component_of_handle(handle).is_some() {
+            return Some(handle);
+        }
+        if let Some(carrier) = capture.carrier_of(Handle::new(handle)) {
+            if capture.index.component_of_handle(carrier).is_some() {
+                return Some(carrier);
             }
         }
     }

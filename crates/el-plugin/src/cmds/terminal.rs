@@ -291,7 +291,8 @@ fn renumber(host: &mut dyn HostApi, a: &mut Args) {
 
     // Group by strip, ordering by the drawn position so a strip is numbered the
     // way it is read rather than the order the scan found entities.
-    let mut work: Vec<(String, Vec<(u64, [f64; 3], TerminalKind)>)> = Vec::new();
+    type TerminalGroup = (String, Vec<(u64, [f64; 3], TerminalKind)>);
+    let mut work: Vec<TerminalGroup> = Vec::new();
     for t in idx.terminals.values() {
         if t.rec.tag_strip.is_empty() {
             continue;

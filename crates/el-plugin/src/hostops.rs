@@ -16,20 +16,20 @@
 use std::collections::HashMap;
 
 /// Index-tolerant entity lookup for the **v2026.41 host** (codec 0.6.0):
-/// `CadDocument::get_entity` misses entities that arrived through the
+/// `Document::get_entity` misses entities that arrived through the
 /// plugin-request path in an earlier dispatch (its new handle->slot index is
 /// not maintained across them), while `entities()` iteration sees
 /// everything. Same host-generation trap the wiring-harness plugin hit
 /// first; identical mitigation.
 pub trait DocEntityExt {
     /// Owned entity lookup - the drop-in replacement for
-    /// `CadDocument::get_entity` inside the plugin.
+    /// `Document::get_entity` inside the plugin.
     fn get_entity_owned(&self, handle: Handle) -> Option<EntityType>;
 }
 
-impl DocEntityExt for CadDocument {
+impl DocEntityExt for Document {
     fn get_entity_owned(&self, handle: Handle) -> Option<EntityType> {
-        // Deliberately NO fast path through `CadDocument::get_entity`: on
+        // Deliberately NO fast path through `Document::get_entity`: on
         // host v2026.41 (codec 0.6.0) its handle→slot index goes stale across
         // dispatches and the lookup panics on an out-of-range slot — and the
         // plugin process runs with panic=abort, so the panic silently kills
@@ -43,7 +43,7 @@ impl DocEntityExt for CadDocument {
 }
 
 
-use ocs_plugin_api::host::codec::{CadDocument, EntityType, Handle};
+use ocs_plugin_api::host::codec::{Document, EntityType, Handle};
 use ocs_plugin_api::host::HostApi;
 
 use el_core::codec::ElRecord;
@@ -68,7 +68,7 @@ impl Tok {
     /// every `E`-prefixed tag — so without it a bare `C1` would be read as
     /// handle 0xC1 and silently address the wrong entity.
     #[allow(dead_code)] // consumed by the Phase 1 placement commands
-    pub fn classify(tok: &str, doc: &CadDocument) -> Tok {
+    pub fn classify(tok: &str, doc: &Document) -> Tok {
         if let Some(c) = parse_coord(tok) {
             return Tok::Coord(c);
         }
@@ -288,13 +288,13 @@ mod tests {
 
     #[test]
     fn classify_prefers_a_coordinate_over_everything() {
-        let doc = CadDocument::default();
+        let doc = Document::default();
         assert_eq!(Tok::classify("5,5", &doc), Tok::Coord([5.0, 5.0, 0.0]));
     }
 
     #[test]
     fn classify_treats_a_bare_tag_as_a_word() {
-        let doc = CadDocument::default();
+        let doc = Document::default();
         assert_eq!(Tok::classify("C1", &doc), Tok::Word("C1".to_string()));
     }
 

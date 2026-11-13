@@ -48,10 +48,11 @@ pub struct PinDef {
 }
 
 /// How a contact rests when the device is unpowered.
-#[derive(Debug, Clone, Copy, PartialEq, Eq, Serialize, Deserialize)]
+#[derive(Debug, Clone, Copy, PartialEq, Eq, Default, Serialize, Deserialize)]
 #[serde(rename_all = "kebab-case")]
 pub enum ContactState {
     /// Not a contact (a coil, a lamp, a terminal).
+    #[default]
     None,
     /// Normally open — the blade is drawn away from its other contact.
     Open,
@@ -59,12 +60,6 @@ pub enum ContactState {
     Closed,
     /// Changeover: one common contact with both an open and a closed throw.
     Changeover,
-}
-
-impl Default for ContactState {
-    fn default() -> Self {
-        ContactState::None
-    }
 }
 
 impl ContactState {

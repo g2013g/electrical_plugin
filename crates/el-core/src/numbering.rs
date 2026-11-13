@@ -72,11 +72,7 @@ impl WireNumberPlan {
 
     /// A one-line summary for the command line.
     pub fn summary(&self) -> String {
-        let mut s = format!(
-            "{} wire number(s) {}",
-            self.assignments.len(),
-            if self.assignments.len() == 1 { "assigned" } else { "assigned" }
-        );
+        let mut s = format!("{} wire number(s) assigned", self.assignments.len());
         if !self.skipped.is_empty() {
             s.push_str(&format!(", {} skipped", self.skipped.len()));
         }
@@ -294,19 +290,21 @@ mod tests {
     use super::*;
 
     fn seq_settings() -> ElSettingsRec {
-        let mut s = ElSettingsRec::default();
-        s.wireno_mode = WireNoMode::Sequential;
-        s.wireno_format = "%N".to_string();
-        s.wireno_start = 1;
-        s.wireno_increment = 1;
-        s
+        ElSettingsRec {
+            wireno_mode: WireNoMode::Sequential,
+            wireno_format: "%N".to_string(),
+            wireno_start: 1,
+            wireno_increment: 1,
+            ..Default::default()
+        }
     }
 
     fn ref_settings() -> ElSettingsRec {
-        let mut s = ElSettingsRec::default();
-        s.wireno_mode = WireNoMode::Reference;
-        s.wireno_format = "%N%X".to_string();
-        s
+        ElSettingsRec {
+            wireno_mode: WireNoMode::Reference,
+            wireno_format: "%N%X".to_string(),
+            ..Default::default()
+        }
     }
 
     fn wire(handle: u64, rung: Option<&str>) -> WireNumberInput {

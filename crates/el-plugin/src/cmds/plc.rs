@@ -54,9 +54,10 @@ fn import_io(
 
     // Rows: point,node[,net]. A header row (point,node…) is skipped, as
     // spreadsheets export one.
+    type PlcRow = (String, [f64; 3], [f64; 3], String, String, String);
     let mut wired = 0usize;
     let mut errors = 0usize;
-    let mut rows: Vec<(String, [f64; 3], [f64; 3], String, String, String)> = Vec::new();
+    let mut rows: Vec<PlcRow> = Vec::new();
     for (n, line) in text.lines().enumerate() {
         let line = line.trim();
         if line.is_empty() || line.starts_with('#') {
@@ -264,7 +265,7 @@ fn edit(host: &mut dyn HostApi, idx: &el_core::ElIndex, a: &mut Args) {
         host.push_error("EL_PLC: EDIT needs the module — EL_PLC EDIT P1 DI=16");
         return;
     };
-    let Some(m) = idx.plc_by_tag(&tag) else {
+    let Some(m) = idx.plc_by_tag(tag) else {
         host.push_error(&format!("EL_PLC: no module tagged {tag:?}"));
         return;
     };

@@ -802,12 +802,14 @@ mod tests {
 
     #[test]
     fn settings_round_trip() {
-        let mut s = ElSettingsRec::default();
-        s.sheet = "03".to_string();
-        s.tag_format = "%S-%F%N".to_string();
-        s.tag_mode = TagMode::Reference;
-        s.wireno_start = 500;
-        s.ladder_width_mm = 210.5;
+        let s = ElSettingsRec {
+            sheet: "03".to_string(),
+            tag_format: "%S-%F%N".to_string(),
+            tag_mode: TagMode::Reference,
+            wireno_start: 500,
+            ladder_width_mm: 210.5,
+            ..Default::default()
+        };
         let back = ElRecord::encode_settings(&s).decode_settings().unwrap();
         assert_eq!(back, s);
     }

@@ -1,9 +1,11 @@
-//! Electrical plugin for Open CAD Studio (host v2026.36.0, plugin API 5).
+//! Electrical plugin for Open CAD Studio (host v2026.44, plugin API 14).
 //!
-//! ABI contract: for api_version >= 4 the host load gate requires
-//! `[opencad] rustc_version` in `plugin.toml` to match its own `rustc --version`
-//! token-for-token — see `crates/el-plugin/plugin.toml` for the host's embedded
-//! version record and `rust-toolchain.toml` for the toolchain that satisfies it.
+//! ABI contract at API >= 14: the plugin runs its own runner loop
+//! (`ocs_plugin_run`, emitted by `export_plugin!`) and the host matches it by
+//! wire schema (codec types' serde shapes), not by compiler or codec commit —
+//! see `crates/el-plugin/plugin.toml` for the host's embedded record. The wire
+//! schema is only equal if this crate builds against the host's own release
+//! checkout (`../OpenCADStudio`, tracked on the v2026.44 tag).
 //!
 //! Electrical control-schematic workflow, modelled on AutoCAD Electrical's
 //! three-tier design as far as a plugin with no project database can reach:
@@ -20,6 +22,13 @@
 //! there is no way to create a block definition, so symbols are drawn as
 //! primitives; and interactive callbacks run against a `NullHost`, so anything
 //! a click handler needs must be captured at dispatch time (see `hostops`).
+
+// Crate-level: the v14 export_plugin! expansion emits ocs_plugin_run, which
+// derefs its socket argument after a null check; clippy's flow-insensitive
+// not_unsafe_ptr_arg_deref cannot see the guard and attributes on the macro
+// invocation do not reach the expansion. The macro's C-ABI fn is the only
+// raw-pointer code in this crate.
+#![allow(clippy::not_unsafe_ptr_arg_deref)]
 
 mod cmds;
 mod codec;
@@ -392,7 +401,9 @@ impl BuiltinPlugin for ElectricalPlugin {
     }
 
     fn dispatch(&self, host: &mut dyn HostApi, cmd: &str) -> bool {
-        eprintln!("[el] dispatch called: {cmd:?}");
+        // No stderr logging here: host v2026.44 drains plugin stdout/stderr
+        // into the command line as red "[plugin stderr]" error lines, so any
+        // per-dispatch chatter reads as a failure to the user.
         let mut tokens = cmd.split_whitespace();
         let Some(command) = tokens.next() else {
             return false;
