@@ -1,6 +1,6 @@
 # Deployed beside the plugin binary in
 #   <config>/OpenCADStudio/plugins/opencad.electrical/
-# Target host: Open CAD Studio v2026.45 (plugin API 15).
+# Target host: Open CAD Studio v2026.46 (plugin API 23).
 #
 # Load-gate contract (host `src/plugin/external.rs` →
 # `version_info::uses_acadrust_gate`):
@@ -15,17 +15,17 @@
 #   but the host writes …; rebuild the plugin against this host's
 #   ocs_plugin_api"). Equal wire schema is guaranteed by building against a
 #   checkout of the host's own release tag: the codec graph resolved there
-#   (opencaddocument@b9e1762 → acadrust 0.6.8@eababc03, all immutable revs) is
+#   (opencaddocument@ae40a59 → acadrust 0.6.8@f946e8d, all immutable revs) is
 #   what the release host was built with, so NO rustc/codec declarations are
 #   needed in this file any more.
 #
-# Host v2026.45 embeds this record (extracted from the installed
-# C:\Program Files\Open CAD Studio exe, 2026-11-14):
-#   api_version        15         (min supported 3)
+# Host v2026.46 embeds this record (extracted from the installed
+# C:\Program Files\Open CAD Studio exe, 2026-11-16):
+#   api_version        23         (min supported 3)
 #   acadrust_version   0.6.8
-#   acadrust_source    git+https://github.com/hakanaktt/acadrust.git?rev=eababc03
-#                      (full hash in the tag's Cargo.lock: eababc03c625eaf9cfc5169953d7ee88f2015338)
-#   rustc_version      rustc 1.99.1 (58cf8f9c3 2026-10-13)
+#   acadrust_source    git+https://github.com/hakanaktt/acadrust.git?rev=f946e8d
+#                      (full hash in the tag's Cargo.lock: f946e8d0c15508c4581b228a1efe44c18dc96234)
+#   rustc_version      rustc 1.100.0 (0ef1bc386 2026-11-09)
 #
 # API 13→14 (v2026.44) surface: additive — self-hosted runner
 # (ocs_plugin_run), parametric chains, plugin-scoped entity classes with a
@@ -35,20 +35,26 @@
 # shared OpenCADDocument model (IFCX open/save).
 # API 14→15 (v2026.45) surface: additive — quad panels + custom icons
 # (QuadPanelDef / RegisterQuadPanels / HostNotification::QuadAction with a
-# default no-op on_quad_action on the plugin trait); wire_schema unchanged by
-# design. Upstream main is already past this, so the pristine checkout tracks
-# the v2026.45 tag (fb0a667), NOT upstream HEAD.
+# default no-op on_quad_action on the plugin trait).
+# API 15→23 (v2026.46) surface: additive throughout — reactive dialogs (v17),
+# dock-panel snapshots (v18), styled text/SVG dialog controls (v19),
+# selectable custom entity facades (v20), XY-plane grip constraint (v21),
+# geo location + SelectionChangedDigest + panel_action op (v22), layout tab
+# order (v23). No routing change affects this plugin (it consumes no
+# selection notifications); wire_schema unchanged by design. Upstream main is
+# already past this, so the pristine checkout tracks the v2026.46
+# tag (8b4d270), NOT upstream HEAD.
 
 [plugin]
 id = "opencad.electrical"
 name = "Electrical"
-version = "0.1.8"
+version = "0.1.9"
 description = "Electrical control-schematic design: ladders and line references, wire numbering, component tagging and cross-references, terminals, cables, reports and audit."
 author = "electrical plugin contributors"
 license = "GPL-3.0-only"
 
 [opencad]
-api_version = 15
+api_version = 23
 ribbon_order = 70
 command_prefixes = ["EL_"]
 xdata_apps = ["OCSEL"]

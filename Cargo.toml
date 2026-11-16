@@ -3,22 +3,22 @@ resolver = "2"
 members = ["crates/el-core", "crates/el-plugin"]
 
 [workspace.package]
-version = "0.1.8"
+version = "0.1.9"
 edition = "2021"
 license = "GPL-3.0-only"
 authors = ["OpenCADStudio electrical plugin contributors"]
 
 [workspace.dependencies]
 # The stable plugin contract, built against the pristine OpenCAD Studio
-# v2026.45 checkout (API version 15, min supported 3, codec re-exported as
+# v2026.46 checkout (API version 23, min supported 3, codec re-exported as
 # `host::codec`). At API >= 14 the host matches plugins by wire schema (codec
 # types' serde shapes), not by compiler or codec commit, so no fingerprint
 # declarations are needed any more — but the build MUST come from the host's
 # own release tag or the wire-schema check refuses the runner at connect.
-# The tag's Cargo.lock resolves acadrust 0.6.8@eababc03 (via
-# opencaddocument@b9e1762), which is what the v2026.45 release host embeds;
+# The tag's Cargo.lock resolves acadrust 0.6.8@f946e8d (via
+# opencaddocument@ae40a59), which is what the v2026.46 release host embeds;
 # upstream main is already past this release, so the checkout must stay on
-# the v2026.45 tag (fb0a667), not upstream HEAD.
+# the v2026.46 tag (8b4d270), not upstream HEAD.
 ocs_plugin_api = { path = "../OpenCADStudio/crates/ocs_plugin_api", features = ["host"] }
 uuid = { version = "1", features = ["v4"] }
 
