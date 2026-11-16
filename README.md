@@ -63,6 +63,7 @@ logic is testable without a CAD host and is insulated from ABI churn.
 | `EL_LINK <child> <parent>` | Attach a device to a parent, or `CLEAR <child>` to detach. Bare = list every relationship. |
 | `EL_XREF [ALL \| <tag>]` | Write cross-reference annotations. `CLEAR` removes them. |
 | `EL_RETAG [ALL \| <family>] [START=n] [DRYRUN]` | Renumber device tags. `FIX`/`UNFIX <tag>` pins one. |
+| `EL_PICK [<symbol> <tag> <x,y>]` | **Symbol browser** (host API 17/19): a dialog with family → symbol dropdowns, a live SVG preview drawn from the symbol's own glyph, and a tag field. Bare (or a bare `EL_COMPONENT`) opens the dialog, then pick the insertion point. With arguments it inserts directly — the script/automation form. |
 | `EL_LIB [LIST \| SHOW <name> \| FAMILIES \| PATH [LOCAL\|GLOBAL\|<file>] \| EXPORT \| RELOAD]` | Inspect and switch the symbol library. |
 | `EL_TERMINAL [kind] [strip] [x,y] [NO=] [PART=] [DESC=] [LINK=]` | Place a terminal block. Kinds: screw, spring, ground, fused, disconnect, multi, test. `NUMBER` renumbers every strip; `REORDER <strip> <no…>` renumbers in a stated order (jumpers remap with their terminals); `PARTITION <d> <name\|CLEAR>` puts a terminal in a partition group; `JUMPER <a> <b>` bridges two terminals of a strip into one circuit (nets merge across it; `JUMPER CLEAR <a>`, `JUMPER LIST`); `LIST`, `CLEAR`. |
 | `EL_TITLEBLOCK [x,y] [TITLE= DRAWN= DATE= APPROVED= SHEETS=]` \| UPDATE \| CLEAR \| SHOW` | The drawing frame + title table. **Fields are a render**: sheet/drawing/inst/loc/revision read live from `EL_SETTINGS`, the `OF n` count from the project register — `UPDATE` re-renders after any change (the plugin's title-block update). The frame follows the drawing's extents. |
@@ -304,7 +305,7 @@ rustc --version   # must be rustc 1.99.1 (58cf8f9c3 2026-10-13)
 ```
 
 ```bash
-cargo test                                    # 419 tests: 331 el-core + 88 el-plugin
+cargo test                                    # 425 tests: 331 el-core + 94 el-plugin
 cargo build --release --package el-plugin
 
 DEST="$APPDATA/OpenCADStudio/plugins/opencad.electrical"
@@ -312,7 +313,7 @@ mkdir -p "$DEST"
 cp target/release/el_plugin.dll "$DEST/el_plugin.dll"
 cp crates/el-plugin/plugin.toml "$DEST/plugin.toml"
 
-python tests/serve_driver.py                  # 303 behavioural checks
+python tests/serve_driver.py                  # 307 behavioural checks
 ```
 
 Restart Open CAD Studio after deploying so Windows unmaps the old DLL. The

@@ -48,7 +48,7 @@
 [plugin]
 id = "opencad.electrical"
 name = "Electrical"
-version = "0.1.9"
+version = "0.1.10"
 description = "Electrical control-schematic design: ladders and line references, wire numbering, component tagging and cross-references, terminals, cables, reports and audit."
 author = "electrical plugin contributors"
 license = "GPL-3.0-only"

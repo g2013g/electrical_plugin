@@ -43,8 +43,8 @@ except (AttributeError, ValueError):
 HERE = os.path.dirname(os.path.abspath(__file__))
 ROOT = os.path.dirname(HERE)
 WORK = os.path.join(ROOT, "target", "serve-test")
-# Default: the installed auto-updating desktop build (v2026.45, API 15, as of
-# 2026-11-14); override with OCS_SERVE_EXE for another host build.
+# Default: the installed auto-updating desktop build (v2026.46, API 23, as of
+# 2026-11-16); override with OCS_SERVE_EXE for another host build.
 EXE = os.environ.get(
     "OCS_SERVE_EXE",
     r"C:\Program Files\Open CAD Studio\OpenCADStudio.exe",
@@ -1299,6 +1299,34 @@ def phase_components():
 
     text = s.run_and_collect("EL_COMPONENT utterly-unknown 0,0")
     check("an unknown symbol or family is reported", "is not a symbol or family" in text, text[:220])
+
+    # ── the symbol picker (API 17/19 reactive dialog) ──
+    # `EL_PICK <symbol> …` is the direct form and must insert exactly like
+    # EL_COMPONENT — that is what scripts and the automation use.
+    baseline = s.count_on(COMPONENT_LAYER)
+    s.run("EL_COMPONENT fuse F8 40,150")
+    fuse_delta = s.count_on(COMPONENT_LAYER) - baseline
+    s.run("EL_PICK fuse F9 60,150")
+    check("EL_PICK direct form inserts like EL_COMPONENT",
+          s.count_on(COMPONENT_LAYER) == baseline + 2 * fuse_delta,
+          f"fuse draws {fuse_delta}; picker total {s.count_on(COMPONENT_LAYER)} vs {baseline + 2 * fuse_delta}")
+    text = s.run_and_collect("EL_PICK utterly-unknown 60,140")
+    check("EL_PICK unknown symbol reports the families", "is not a symbol or family" in text, text[:220])
+
+    # Bare EL_PICK opens the GUI browser. Headless, the host skips the dialog
+    # and the command cancels — the contract it must keep is that it does NOT
+    # swallow the input stream and places nothing without a choice.
+    before = s.count_on(COMPONENT_LAYER)
+    s.run("EL_PICK")
+    check("bare EL_PICK places nothing headless", s.count_on(COMPONENT_LAYER) == before,
+          f"{before} → {s.count_on(COMPONENT_LAYER)}")
+    # push_output is GUI-only over --serve, so "usable" is proven by effect:
+    # the next placement must land normally, proving no pending picker command
+    # is eating the input stream.
+    s.run("EL_COMPONENT fuse F10 60,140")
+    check("bare EL_PICK leaves the stream usable (next insert lands)",
+          s.count_on(COMPONENT_LAYER) == before + fuse_delta,
+          f"{before} → {s.count_on(COMPONENT_LAYER)}, expected +{fuse_delta}")
 
     # Auto-tagging: per-family counters, so Q1 is the first breaker.
     s.run("EL_COMPONENT Q 60,170")

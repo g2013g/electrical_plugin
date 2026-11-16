@@ -331,6 +331,7 @@ impl CadModule for ElectricalModule {
                             id: "EL_LIB_DD",
                             icon: IconKind::Glyph("⋯"),
                             items: vec![
+                                ("EL_PICK", "Pick a symbol (browser)", IconKind::Glyph("◉")),
                                 ("EL_LIB LIST", "List symbols", IconKind::Glyph("≡")),
                                 ("EL_LIB FAMILIES", "List families", IconKind::Glyph("⌗")),
                                 ("EL_LIB PATH", "Which library file is in effect", IconKind::Glyph("⌂")),
@@ -432,6 +433,7 @@ impl BuiltinPlugin for ElectricalPlugin {
             "EL_WIREGAP" | "EL_WG" => cmds::wiregap::run(host, &args),
             "EL_TRIMWIRE" | "EL_TRIM" => cmds::wiregap::run_trim(host, &args),
             "EL_COMPONENT" | "EL_COMP" => cmds::component::run(host, &args),
+            "EL_PICK" => cmds::picker::run(host, &args),
             "EL_SYMBOL" => cmds::symbol_cmd::run(host, &args),
             "EL_LIB" => cmds::library_cmd::run(host, &args),
             "EL_LINK" => cmds::link::run(host, &args),
@@ -512,6 +514,7 @@ mod completion_tests {
         "EL_STRIP",
         "EL_COMPONENT",
         "EL_COMP",
+        "EL_PICK",
         "EL_SYMBOL",
         "EL_LIB",
         "EL_LINK",

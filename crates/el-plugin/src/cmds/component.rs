@@ -52,11 +52,17 @@ pub fn run(host: &mut dyn HostApi, args: &[&str]) {
         .filter(|t| !t.contains(','))
         .cloned()
         .collect();
-    let symbol_token = words.first().cloned();
+    // No symbol named at all: open the browser (host plugin API 17/19
+    // reactive dialog with live SVG previews) instead of an error listing
+    // families. `EL_PICK` is the explicit form.
+    let Some(symbol_token) = words.first().cloned() else {
+        crate::cmds::picker::start_picker(host);
+        return;
+    };
     let tag_token = words.get(1).cloned();
 
-    let Some(def) = resolve_symbol(&lib, symbol_token.as_deref()) else {
-        let token = symbol_token.clone().unwrap_or_default();
+    let Some(def) = resolve_symbol(&lib, Some(symbol_token.as_str())) else {
+        let token = symbol_token.clone();
         // `EL_COMPONENT K1 10,20` reads like "place K1" but names a symbol, so
         // the failure is worth a hint rather than a list of families.
         let looks_like_a_tag = el_core::model::family_of(&token).len() < token.len()
@@ -295,12 +301,31 @@ fn start_interactive(host: &mut dyn HostApi, symbol: String, tag: Option<String>
     }));
 }
 
-struct ComponentCmd {
+pub(crate) struct ComponentCmd {
     def: SymbolDef,
     settings: el_core::ElSettingsRec,
     idx: ElIndex,
     tag: Option<String>,
     placed: bool,
+}
+
+impl ComponentCmd {
+    /// The picker hands over a fully-chosen symbol; the command starts
+    /// fresh, waiting for its insertion point.
+    pub(crate) fn new(
+        def: SymbolDef,
+        settings: el_core::ElSettingsRec,
+        idx: ElIndex,
+        tag: Option<String>,
+    ) -> Self {
+        Self {
+            def,
+            settings,
+            idx,
+            tag,
+            placed: false,
+        }
+    }
 }
 
 impl InteractiveCommand for ComponentCmd {

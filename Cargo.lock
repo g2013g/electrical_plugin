@@ -219,7 +219,7 @@ checksum = "252afb9ae5eaa683babdc6a068b3f5726eb19e05070c731f9b2a23a7c3e8ed34"
 
 [[package]]
 name = "el-core"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "serde",
  "serde_json",
@@ -229,7 +229,7 @@ dependencies = [
 
 [[package]]
 name = "el-plugin"
-version = "0.1.9"
+version = "0.1.10"
 dependencies = [
  "el-core",
  "ocs_plugin_api",
