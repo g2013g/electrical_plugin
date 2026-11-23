@@ -523,6 +523,18 @@ impl InteractiveCommand for WireCmd {
     fn on_enter(&mut self) -> CommandStep {
         CommandStep::Cancel
     }
+
+    /// Mid-command Ctrl+Z (host API v24): forget the start point so the user
+    /// re-picks it. Without this the host would undo the *document* — the
+    /// user's previous command — while this one keeps waiting, because
+    /// nothing has been drawn yet between the two picks.
+    fn on_undo_step(&mut self) -> Option<CommandStep> {
+        if self.start.take().is_some() && !self.placed {
+            Some(CommandStep::NeedPoint)
+        } else {
+            None
+        }
+    }
 }
 
 /// Pull a picked start point onto a rung if it is near one, so a wire drawn by

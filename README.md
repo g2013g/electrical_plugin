@@ -8,17 +8,17 @@ built as an out-of-tree plugin against the host's stable `ocs_plugin_api`.
 The host is kept **pristine**. Everything lives here.
 
 ```
-host:      Open CAD Studio v2026.46     (plugin API 23, min supported 3)
-plugin:    opencad.electrical 0.1.9
+host:      Open CAD Studio v2026.47     (plugin API 28, min supported 3)
+plugin:    opencad.electrical 0.1.11
 prefix:    EL_            app id: OCSEL          ribbon order: 70
 ```
 
-Contract notes (host v2026.46): at plugin API >= 14 the host matches plugins
+Contract notes (host v2026.47): at plugin API >= 14 the host matches plugins
 by **wire schema** (the codec types' serde shapes) instead of compiler or codec
 fingerprints — no `rustc_version` / `acadrust_source` declarations any more,
 but the build MUST consume the same codec graph via the checkout's
 `ocs_plugin_api` path dependency pinned to the host's release tag
-(`opencaddocument@ae40a59` → `acadrust` 0.6.8@`f946e8d` for v2026.46);
+(`opencaddocument@663bc3a1` → `acadrust` 0.6.8@`14f7da1` for v2026.47);
 upstream main is ahead of every release, so never build against HEAD.
 Current ABI authority: `../ocs-wiring-harness/docs/AGENT_HANDOFF_AND_RUNBOOK.md`.
 
@@ -46,6 +46,12 @@ crate imports neither `iced`, `acadrust`, nor `OpenCADStudio`, so all domain
 logic is testable without a CAD host and is insulated from ABI churn.
 
 ## Commands
+
+Also exposed as **AI tools** (host API v25): **el_bom** (the BOM tally as
+structured JSON) and **el_project_info** (a drawing census) — listed via
+`ocs_read` op `plugins`, callable via `ocs_execute` op
+`plugin_call {plugin: "opencad.electrical", tool, arguments}`; both read-only.
+Mid-command **Ctrl+Z** pops `EL_WIRE`'s pending start point (host API v24).
 
 | Command | Purpose |
 | :--- | :--- |

@@ -1,11 +1,11 @@
-//! Electrical plugin for Open CAD Studio (host v2026.45, plugin API 15).
+//! Electrical plugin for Open CAD Studio (host v2026.47, plugin API 28).
 //!
 //! ABI contract at API >= 14: the plugin runs its own runner loop
 //! (`ocs_plugin_run`, emitted by `export_plugin!`) and the host matches it by
 //! wire schema (codec types' serde shapes), not by compiler or codec commit —
 //! see `crates/el-plugin/plugin.toml` for the host's embedded record. The wire
 //! schema is only equal if this crate builds against the host's own release
-//! checkout (`../OpenCADStudio`, tracked on the v2026.45 tag).
+//! checkout (`../OpenCADStudio`, tracked on the v2026.47 tag).
 //!
 //! Electrical control-schematic workflow, modelled on AutoCAD Electrical's
 //! three-tier design as far as a plugin with no project database can reach:
@@ -473,6 +473,22 @@ impl BuiltinPlugin for ElectricalPlugin {
             _ => return false,
         }
         true
+    }
+
+    /// AI tools (host API v25): read-only analysis operations callable by AI
+    /// clients over the automation bridge. Additive and passive — the host
+    /// only asks plugins that declare v25+.
+    fn tools(&self) -> Vec<ocs_plugin_api::host::PluginTool> {
+        cmds::tools::tools()
+    }
+
+    fn call_tool(
+        &mut self,
+        host: &mut dyn HostApi,
+        name: &str,
+        arguments: &str,
+    ) -> Result<String, String> {
+        cmds::tools::call_tool(host, name, arguments)
     }
 }
 

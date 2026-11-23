@@ -5,7 +5,7 @@ version = 4
 [[package]]
 name = "acadrust"
 version = "0.6.8"
-source = "git+https://github.com/hakanaktt/acadrust.git?rev=f946e8d#f946e8d0c15508c4581b228a1efe44c18dc96234"
+source = "git+https://github.com/hakanaktt/acadrust.git?rev=14f7da106cdd20fac94ffbdc238e3012bbe4a553#14f7da106cdd20fac94ffbdc238e3012bbe4a553"
 dependencies = [
  "anyhow",
  "bitflags",
@@ -25,6 +25,7 @@ dependencies = [
  "serde",
  "thiserror 2.0.21",
  "web-time",
+ "whichever",
 ]
 
 [[package]]
@@ -219,7 +220,7 @@ checksum = "252afb9ae5eaa683babdc6a068b3f5726eb19e05070c731f9b2a23a7c3e8ed34"
 
 [[package]]
 name = "el-core"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "serde",
  "serde_json",
@@ -229,10 +230,11 @@ dependencies = [
 
 [[package]]
 name = "el-plugin"
-version = "0.1.10"
+version = "0.1.11"
 dependencies = [
  "el-core",
  "ocs_plugin_api",
+ "serde_json",
 ]
 
 [[package]]
@@ -645,7 +647,7 @@ checksum = "9f7c3e4beb33f85d45ae3e3a1792185706c8e16d043238c593331cc7cd313b50"
 [[package]]
 name = "opencaddocument"
 version = "0.1.0"
-source = "git+https://github.com/HakanSeven12/opencaddocument.git?rev=ae40a59#ae40a5921f678aa94bf143aaf39d01e739db58bb"
+source = "git+https://github.com/HakanSeven12/opencaddocument.git?rev=663bc3a1a2075f939eadafd7fb16683de39a473f#663bc3a1a2075f939eadafd7fb16683de39a473f"
 dependencies = [
  "acadrust",
  "serde",
@@ -1312,6 +1314,26 @@ source = "registry+https://github.com/rust-lang/crates.io-index"
 checksum = "f5f280bbb2b287bc8e7de7e3852945a0ff50d1bbcb5ed42b6c7a568c546df171"
 dependencies = [
  "rustls-pki-types",
+]
+
+[[package]]
+name = "whichever"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "68887c9512981e597d730f1d95b2eb6abdd53385e4e76c35a95e7121e16232b0"
+dependencies = [
+ "whichever-macros",
+]
+
+[[package]]
+name = "whichever-macros"
+version = "0.7.3"
+source = "registry+https://github.com/rust-lang/crates.io-index"
+checksum = "cb15ad553239d9fdefac12e31e16c7682dc62a2106ba035aec69c5dd15835a7b"
+dependencies = [
+ "proc-macro2",
+ "quote",
+ "syn 3.0.5",
 ]
 
 [[package]]
